@@ -9,16 +9,6 @@
           }
         ]
       }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'f=\"$HOME/.claude/sync-pending\"; if [ -f \"$f\" ] && [ -s \"$f\" ]; then echo \"【立即執行 sync:diff 合併流程，在回應使用者前完成】\"; echo \"差異內容（- 為 repo 版、+ 為本機版）：\"; cat \"$f\"; fi'"
-          }
-        ]
-      }
     ]
   }
 }
