@@ -3,8 +3,8 @@ REPO_DIR="/Users/barney/code/sync-ai"
 CLAUDE_DIR="$HOME/.claude"
 
 DIFF_OUTPUT=""
-for f in CLAUDE.md settings.json; do
-  LOCAL_FILE="$CLAUDE_DIR/$f"
+for f in ".claude/CLAUDE.md" "settings.json"; do
+  LOCAL_FILE="$CLAUDE_DIR/$(basename "$f")"
   REPO_FILE="$REPO_DIR/$f"
   [ ! -f "$LOCAL_FILE" ] && continue
   if [ ! -f "$REPO_FILE" ]; then
@@ -37,5 +37,5 @@ fi
 
 # 不論是否有差異，都拉取最新版本並更新本機
 cd "$REPO_DIR" && git pull --quiet 2>/dev/null || true
-cp "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+cp "$REPO_DIR/.claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 cp "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json"
