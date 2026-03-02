@@ -2,8 +2,12 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "bash -c 'R=/Users/barney/code/sync-ai; for f in CLAUDE.md settings.json; do diff \"$R/claude/$f\" \"$HOME/.claude/$f\" 2>/dev/null; done'"
+        "hooks":[
+          {
+            "type": "command",
+            "command": "bash -c 'R=/Users/barney/code/sync-ai; for f in CLAUDE.md settings.json; do diff \"$R/claude/$f\" \"$HOME/.claude/$f\" 2>/dev/null; done'"
+          }
+        ]
       }
     ]
   }
