@@ -9,17 +9,5 @@
       "WebFetch(*)"
     ]
   },
-  "language": "繁體中文",
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /Users/barney/code/sync-ai/sync-pull.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "language": "繁體中文"
 }
