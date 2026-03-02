@@ -2,10 +2,20 @@
   "hooks": {
     "SessionStart": [
       {
-        "hooks":[
+        "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'R=/Users/barney/code/sync-ai; for f in CLAUDE.md settings.json; do diff \"$R/claude/$f\" \"$HOME/.claude/$f\" 2>/dev/null; done'"
+            "command": "bash -c 'R=/Users/barney/code/sync-ai; diffs=$(diff \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\" 2>/dev/null; diff \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\" 2>/dev/null); if [ -z \"$diffs\" ]; then cd \"$R\" && git pull --ff-only 2>&1 | head -3; cp \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\"; cp \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\"; echo \"sync:ok（本機設定已更新）\"; else echo \"$diffs\" > \"$HOME/.claude/sync-pending\"; echo \"sync:diff\"; echo \"$diffs\"; fi'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'f=\"$HOME/.claude/sync-pending\"; if [ -f \"$f\" ] && [ -s \"$f\" ]; then echo \"【立即執行 sync:diff 合併流程，在回應使用者前完成】\"; echo \"差異內容（- 為 repo 版、+ 為本機版）：\"; cat \"$f\"; fi'"
           }
         ]
       }
