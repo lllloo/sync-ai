@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'R=/Users/barney/code/sync-ai; diffs=$(diff \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\" 2>/dev/null; diff \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\" 2>/dev/null); if [ -z \"$diffs\" ]; then cd \"$R\" && git pull --ff-only 2>&1 | head -3; cp \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\"; cp \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\"; echo \"sync:ok（本機設定已更新）\"; else echo \"$diffs\" > \"$HOME/.claude/sync-pending\"; echo \"sync:diff\"; echo \"$diffs\"; fi'"
+            "command": "bash -c 'R=$PWD; diffs=$(diff \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\" 2>/dev/null; diff \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\" 2>/dev/null); if [ -z \"$diffs\" ]; then cd \"$R\" && git pull --ff-only 2>&1 | head -3; cp \"$R/claude/CLAUDE.md\" \"$HOME/.claude/CLAUDE.md\"; cp \"$R/claude/settings.json\" \"$HOME/.claude/settings.json\"; echo \"sync:ok（本機設定已更新）\"; else echo \"sync:diff\"; echo \"$diffs\"; fi'"
           }
         ]
       }
