@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "WebSearch",
+      "WebFetch(*)"
+    ]
+  },
+  "language": "繁體中文",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/barney/code/sync-ai/sync-pull.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cp $HOME/.claude/CLAUDE.md /Users/barney/code/sync-ai/CLAUDE.md; cp $HOME/.claude/settings.json /Users/barney/code/sync-ai/settings.json; cd /Users/barney/code/sync-ai && git pull --rebase --quiet 2>/dev/null || true; git diff --quiet && exit 0; git add CLAUDE.md settings.json && git commit -m \"chore: sync $(date +%Y-%m-%d)\" && git push --quiet 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+CLAUDE_DIR="$HOME/.claude"
+
+mkdir -p "$CLAUDE_DIR"
+cp "$REPO_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+cp "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json"
+
+echo "Done."
