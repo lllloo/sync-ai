@@ -6,7 +6,10 @@
       "Bash(git push:*)",
       "Bash(cp:*)",
       "WebSearch",
-      "WebFetch(*)"
+      "WebFetch(*)",
+      "Bash(du:*)",
+      "Bash(~/.claude/CLAUDE.md:*)",
+      "Bash(mkdir:*)"
     ]
   },
   "language": "繁體中文"
