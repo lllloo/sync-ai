@@ -3,7 +3,7 @@ REPO_DIR="/Users/barney/code/sync-ai"
 CLAUDE_DIR="$HOME/.claude"
 
 DIFF_OUTPUT=""
-for f in ".claude/CLAUDE.md" "settings.json"; do
+for f in "claude/CLAUDE.md" "claude/settings.json"; do
   LOCAL_FILE="$CLAUDE_DIR/$(basename "$f")"
   REPO_FILE="$REPO_DIR/$f"
   [ ! -f "$LOCAL_FILE" ] && continue
@@ -33,9 +33,21 @@ $ANALYSIS
 
 ---
 本機設定尚未同步到 repo。請確認是否要將本機設定推送到 sync repo？"
+  # 有差異時保留本機設定，不自動 pull/cp，讓使用者決定後再處理
+  exit 0
 fi
 
-# 不論是否有差異，都拉取最新版本並更新本機
-cd "$REPO_DIR" && git pull --quiet 2>/dev/null || true
-cp "$REPO_DIR/.claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-cp "$REPO_DIR/settings.json" "$CLAUDE_DIR/settings.json"
+# 無差異時才自動拉取最新版本並更新本機
+if ! cd "$REPO_DIR"; then
+  echo "【警告】無法進入 repo 目錄 $REPO_DIR，本機設定未更新"
+  exit 0
+fi
+
+PULL_OUTPUT=$(git pull 2>&1)
+if [ $? -ne 0 ]; then
+  echo "【警告】git pull 失敗，本機設定未更新：$PULL_OUTPUT"
+  exit 0
+fi
+
+cp "$REPO_DIR/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+cp "$REPO_DIR/claude/settings.json" "$CLAUDE_DIR/settings.json"

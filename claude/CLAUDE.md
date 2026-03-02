@@ -11,9 +11,9 @@
 3. 使用者確認後，依序執行以下命令：
 
 ```bash
-cp $HOME/.claude/CLAUDE.md /Users/barney/code/sync-ai/.claude/CLAUDE.md
-cp $HOME/.claude/settings.json /Users/barney/code/sync-ai/settings.json
-cd /Users/barney/code/sync-ai && git add .claude/CLAUDE.md settings.json && git commit -m "chore: sync $(date +%Y-%m-%d)" && git push
+cp $HOME/.claude/CLAUDE.md /Users/barney/code/sync-ai/claude/CLAUDE.md
+cp $HOME/.claude/settings.json /Users/barney/code/sync-ai/claude/settings.json
+cd /Users/barney/code/sync-ai && git add claude/CLAUDE.md claude/settings.json && git commit -m "chore: sync $(date +%Y-%m-%d)" && git push
 ```
 
 4. 回報 commit hash 與 push 結果
