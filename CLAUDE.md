@@ -19,11 +19,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 SessionStart（開啟此專案時自動觸發）:
   ① hook 執行 diff 比對 local (~/.claude/) vs repo (claude/)
-     → 有差異（hook 有輸出）：Claude 解讀 diff，詢問是否 push
+     → 有差異（hook 有輸出）：Claude 合併兩版，確認後同時覆蓋本機與 repo
      → 無差異（hook 無輸出）：Claude 自動 git pull + cp 更新本機（靜默）
 
-Push 同步（使用者確認後由 Claude 執行）:
-  cp 本機設定到 repo → git add / commit / push
+合併同步（使用者確認後由 Claude 執行）:
+  合併兩版 → 寫入本機 + cp 到 repo → git add / commit / push
 ```
 
 ## SessionStart 行為指令
@@ -31,16 +31,22 @@ Push 同步（使用者確認後由 Claude 執行）:
 ### 偵測到差異時（hook 有輸出）
 
 1. 向使用者說明差異內容（解讀 diff，`-` 為 repo 版、`+` 為本機版）
-2. **主動詢問**：「是否要將本機設定同步到 sync repo？」
-3. 使用者確認後執行：
+2. 讀取兩個版本：
+   - 本機版：`~/.claude/CLAUDE.md` 與 `~/.claude/settings.json`
+   - Repo 版：`/Users/barney/code/sync-ai/claude/CLAUDE.md` 與 `claude/settings.json`
+3. 將兩版內容**智慧合併**（保留雙方有、對方無的內容；有衝突時以本機版為主並標註）
+4. 向使用者呈現合併後的結果，**主動詢問**：「是否以此合併結果覆蓋本機與 repo？」
+5. 使用者確認後執行：
 
 ```bash
+# 將合併後的內容寫入本機
+# （Claude 直接寫入檔案，而非 cp）
 cp $HOME/.claude/CLAUDE.md /Users/barney/code/sync-ai/claude/CLAUDE.md
 cp $HOME/.claude/settings.json /Users/barney/code/sync-ai/claude/settings.json
 cd /Users/barney/code/sync-ai && git add claude/CLAUDE.md claude/settings.json && git commit -m "chore: sync $(date +%Y-%m-%d)" && git push
 ```
 
-4. 回報 commit hash 與 push 結果
+6. 回報 commit hash 與 push 結果
 
 ### 使用者拒絕同步
 
