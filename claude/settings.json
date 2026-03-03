@@ -8,7 +8,7 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git diff:*)",
-      "Bash(git push:*)",
+      "Bash(git pull:*)",
       "Bash(git status:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
@@ -16,7 +16,6 @@
       "WebSearch"
     ]
   },
-  "enabledPlugins": {},
   "language": "繁體中文",
   "autoUpdatesChannel": "latest",
   "effortLevel": "low"
