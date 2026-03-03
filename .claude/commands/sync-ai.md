@@ -10,5 +10,5 @@
      - 「以 Repo 版為主合併」：CLAUDE.md 與 settings.json 其他欄位衝突時，保留 Repo 版內容
    - 呈現差異後，使用 AskUserQuestion 工具以選項方式詢問使用者，選項為：「以 Repo 版為主合併」、「以本機版為主合併」、「取消」
    - 依選擇調整合併策略後再執行合併，並再次以選項確認：「確認同步」與「取消」
-   - 確認後：寫入本機 → cp 到 repo → git add / commit / push
+   - 確認後：寫入本機 → cp 到 repo → git add / commit / push → cp repo 版複製到本機（確保本機與 repo 一致）
    - 顯示同步結果（commit hash、push 狀態）
