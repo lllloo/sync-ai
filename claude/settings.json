@@ -1,6 +1,11 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(git:status)",
+      "Bash(git:diff)",
+      "mcp__pencil",
       "Bash(git commit:*)",
       "Bash(git add:*)",
       "Bash(git push:*)",
@@ -12,5 +17,8 @@
       "Bash(mkdir:*)"
     ]
   },
-  "language": "繁體中文"
+  "enabledPlugins": {},
+  "language": "繁體中文",
+  "autoUpdatesChannel": "latest",
+  "effortLevel": "low"
 }
