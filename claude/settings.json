@@ -1,20 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd:*)",
-      "Bash(ls:*)",
-      "Bash(git:status)",
-      "Bash(git:diff)",
-      "mcp__pencil",
-      "Bash(git commit:*)",
-      "Bash(git add:*)",
-      "Bash(git push:*)",
-      "Bash(cp:*)",
-      "WebSearch",
-      "WebFetch(*)",
-      "Bash(du:*)",
       "Bash(~/.claude/CLAUDE.md:*)",
-      "Bash(mkdir:*)"
+      "Bash(cd:*)",
+      "Bash(cp:*)",
+      "Bash(du:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "WebFetch(*)",
+      "WebSearch"
     ]
   },
   "enabledPlugins": {},
