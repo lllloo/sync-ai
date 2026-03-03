@@ -50,7 +50,8 @@ cp $REPO/claude/settings.json $HOME/.claude/settings.json
 2. 智慧合併：
    - CLAUDE.md：保留雙方有、對方無的內容；衝突以本機版為主
    - settings.json：合併 `permissions.allow` 陣列（去除重複項，合併後字母排序）；其他欄位衝突以本機版為主
-3. 呈現合併結果，詢問：「是否以此合併結果覆蓋本機與 repo？」
+3. 呈現差異後，使用 AskUserQuestion 工具以選項方式詢問，選項為：「以 Repo 版為主合併」、「以本機版為主合併」、「取消」
+4. 依選擇調整合併策略後執行合併，呈現合併結果，再次以選項確認：「確認同步」與「取消」
 4. 確認後執行：
 
 ```bash
