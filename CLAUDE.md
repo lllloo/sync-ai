@@ -25,8 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. 比對 `~/.claude/` 與 `claude/` 的 CLAUDE.md 與 settings.json
 3. 若無差異：顯示「同步完成（無差異）」
 4. 若有差異：詢問策略
-   - **1. 本機版覆蓋 repo**：將本機版複製到 repo 的 `claude/` 目錄，顯示 diff，由使用者自行決定是否 commit 與 push
-   - **2. Repo 版覆蓋本機**：直接複製 repo 版到本機
+   - **1. 用本機設定覆蓋雲端**：將本機版複製到 repo 的 `claude/` 目錄，顯示 diff，由使用者自行決定是否 commit 與 push
+   - **2. 用雲端設定覆蓋本機**：直接複製 repo 版到本機
    - **3. 取消**：不執行任何操作
 
 ## 注意事項
