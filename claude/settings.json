@@ -8,6 +8,7 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git diff:*)",
+      "Bash(git fetch:*)",
       "Bash(git pull:*)",
       "Bash(git status:*)",
       "Bash(echo:*)",
