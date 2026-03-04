@@ -26,11 +26,17 @@ clone 後，請 Claude 執行初始化：
 
 1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
 2. 比對本機（`~/.claude/`）與 repo（`claude/`）的 CLAUDE.md 與 settings.json
-3. 若無差異：將 repo 版複製到本機
+3. 若無差異：將 repo 版複製到本機，顯示「同步完成（無差異）」
 4. 若有差異：詢問策略
-   - **建立本地分支並 commit**：保存本機版到新分支，供後續合併
-   - **Repo 版覆蓋本機**：直接以 repo 版覆蓋本機
-   - **取消**：不執行任何操作
+   - **1. 建立本地分支並 commit**：建立 `sync/<hostname>-<YYYYMMDDHHmm>` 分支，複製本機版到 repo，commit 後切回 main，提示使用者自行合併或 push；合併完成後需再執行一次 `/sync-ai` 以將結果同步回本機
+   - **2. Repo 版覆蓋本機**：直接以 repo 版覆蓋本機
+   - **3. 取消**：不執行任何操作
+
+### 注意事項
+
+- diff 方向：`-` 為 repo 版、`+` 為本機版
+- 分支命名格式：`sync/<hostname>-<YYYYMMDDHHmm>`
+- commit 訊息格式：`sync: 從 <hostname> 同步設定 <YYYYMMDDHHmm>`
 
 ## 檔案結構
 
