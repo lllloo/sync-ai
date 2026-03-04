@@ -10,6 +10,7 @@
       "Bash(git diff:*)",
       "Bash(git pull:*)",
       "Bash(git status:*)",
+      "Bash(echo:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
       "WebFetch(*)",
