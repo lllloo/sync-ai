@@ -1,17 +1,17 @@
 執行 Claude Code 設定同步流程：
 
-1. 比對本機（`~/.claude/`）與 repo（`claude/`）的 CLAUDE.md 與 settings.json
-2. 若無差異：執行 `git pull --ff-only` 並將 repo 版複製到本機，顯示「同步完成（無差異）」
-3. 若有差異：
-   - 讀取本機版與 repo 版完整內容
-   - 智慧合併：CLAUDE.md 保留雙方有、對方無的內容；settings.json 合併 `permissions.allow` 陣列（去除重複項），合併後對 `permissions.allow` 陣列進行字母排序；settings.json 其他欄位（如 `language`、`effortLevel` 等）依合併策略決定以哪一版為主
-   - 合併策略說明：
-     - 「以本機版為主合併」：CLAUDE.md 與 settings.json 其他欄位衝突時，保留本機版內容
-     - 「以 Repo 版為主合併」：CLAUDE.md 與 settings.json 其他欄位衝突時，保留 Repo 版內容
-   - 呈現差異後，使用 AskUserQuestion 工具以選項方式詢問使用者，選項為：「以 Repo 版為主合併」、「以本機版為主合併」、「以 Repo 版直接覆蓋本機」、「取消」
-   - 合併策略補充：
-     - 「以 Repo 版直接覆蓋本機」：不合併，直接以 repo 版覆蓋本機，不產生新 commit，只執行 git pull --ff-only 後 cp repo 到本機
-   - 依選擇調整合併策略後再執行合併，並再次以選項確認：「確認同步」與「取消」
-   - 確認後（合併模式）：寫入本機 → cp 到 repo → git add / commit / push → cp repo 版複製到本機（確保本機與 repo 一致）
-   - 確認後（直接覆蓋模式）：git pull --ff-only → cp repo 版複製到本機
-   - 顯示同步結果（commit hash、push 狀態）
+1. 執行 `git fetch` 取得 remote 最新資訊，比較 local 與 remote 是否有差異
+   - 若 remote 有新 commit：使用 AskUserQuestion 詢問「Remote 有新版，是否執行 git pull？」，選項為「1.  Pull」、「2. 略過」
+   - 若選「Pull」：執行 `git pull --ff-only`
+2. 比對本機（`~/.claude/`）與 repo（`claude/`）的 CLAUDE.md 與 settings.json
+3. 若無差異：將 repo 版複製到本機，顯示「同步完成（無差異）」
+4. 若有差異：
+   - 使用 AskUserQuestion 工具詢問策略，選項為：「1. 建分支 & Push（手動合併）」、「2. Repo 版覆蓋本機」、「3. 取消」
+   - 若選「建分支 & Push（手動合併）」：
+     - 以 `sync/<YYYYMMDDHHmm>` 為名建立新分支（例：`sync/202603041530`）
+     - 將本機的 CLAUDE.md、settings.json 複製到 repo 的 `claude/` 目錄
+     - `git add / commit`（commit 訊息：`sync: 從 <hostname> 同步設定 <YYYYMMDD>`）
+     - `git push -u origin <branch>`
+     - 顯示分支名稱與 push 結果，提示使用者自行在 GitHub 建立 PR 解衝突後合併
+   - 若選「Repo 版覆蓋本機」：將 repo 版複製到本機
+   - 顯示同步結果
