@@ -22,17 +22,15 @@ clone 後，請 Claude 執行初始化：
 /sync-ai
 ```
 
-Claude 會自動比對本機與 repo 的差異，智慧合併後詢問確認，完成後 commit & push。
-
 ## 同步邏輯
 
-| 情況 | 行為 |
-|------|------|
-| 無差異 | `git pull` 後複製 repo 版到本機 |
-| 有差異 | 智慧合併 → 確認 → 寫入本機 + push |
-
-- `CLAUDE.md`：保留雙方差異，衝突以本機為主
-- `settings.json`：合併 `permissions.allow` 並去重排序，其他衝突以本機為主
+1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
+2. 比對本機（`~/.claude/`）與 repo（`claude/`）的 CLAUDE.md 與 settings.json
+3. 若無差異：將 repo 版複製到本機
+4. 若有差異：詢問策略
+   - **建立本地分支並 commit**：保存本機版到新分支，供後續合併
+   - **Repo 版覆蓋本機**：直接以 repo 版覆蓋本機
+   - **取消**：不執行任何操作
 
 ## 檔案結構
 
