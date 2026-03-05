@@ -18,7 +18,21 @@
       "WebSearch"
     ]
   },
+  "enabledPlugins": {
+    "javascript-typescript@claude-code-workflows": true,
+    "code-documentation@claude-code-workflows": true,
+    "debugging-toolkit@claude-code-workflows": true,
+    "cloud-infrastructure@claude-code-workflows": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "source": "github",
+        "repo": "wshobson/agents"
+      }
+    }
+  },
   "language": "繁體中文",
   "autoUpdatesChannel": "latest",
-  "effortLevel": "low"
+  "availableModels": ["sonnet", "haiku"]
 }
