@@ -34,28 +34,43 @@ npx skills add <source> -g --skill <name> --agent claude-code
 /sync-ai
 ```
 
+同步 skills：
+
+```
+/sync-skills
+```
+
 ## 同步邏輯
 
+### `/sync-ai` — config 檔案同步
+
 1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
-2. 逐項比對本機與 repo 的所有同步項目：
-   - CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
-   - skills：讀取 repo `skills-lock.json`，與 `npx skills list -g` 比對
+2. 逐檔比對 CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
    - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
 3. 顯示逐項狀態摘要：
    ```
    📋 同步狀態：
      CLAUDE.md     — ✅ 一致
      settings.json — ⚠️ 有差異
-     skills        — ⚠️ 有差異（本機缺少：frontend-design）
    ```
 4. 若全部一致：顯示「同步完成（無差異）」
-5. 若有差異：顯示說明，詢問策略
-   - **1. 用本機設定覆蓋雲端**：
-     - 檔案：複製本機版到 repo `claude/`，詢問是否自動 commit 並 push
-     - skills：將本機全域 skills 安裝到 repo（更新 `skills-lock.json`），詢問是否自動 commit 並 push
-   - **2. 用雲端設定覆蓋本機**：
-     - 檔案：複製 repo 版到本機
-     - skills：對缺少的 skills 執行 `npx skills add <source> -g --skill <name> --agent claude-code`
+5. 若有差異：詢問策略
+   - **1. 用本機設定覆蓋雲端**：複製本機版到 repo `claude/`，詢問是否自動 commit 並 push
+   - **2. 用雲端設定覆蓋本機**：複製 repo 版到本機
+   - **3. 取消**：不執行任何操作
+
+### `/sync-skills` — Skills 同步
+
+1. 讀取 repo `skills-lock.json`，與 `npx skills list -g` 比對
+2. 顯示差異摘要：
+   ```
+   📋 Skills 同步狀態：
+     frontend-design — ✅ 一致
+     typescript-types — ⚠️ repo 有，本機缺少
+   ```
+3. 若有差異：詢問策略
+   - **1. 用本機設定覆蓋雲端**：將本機全域 skills 安裝到 repo（更新 `skills-lock.json`），詢問是否自動 commit 並 push
+   - **2. 用雲端設定覆蓋本機**：對缺少的 skills 執行 `npx skills add <source> -g --skill <name> --agent claude-code`
    - **3. 取消**：不執行任何操作
 
 ### 注意事項
@@ -74,4 +89,5 @@ skills-lock.json   # skills 安裝清單（source of truth）
 .claude/
   commands/
     sync-ai.md     # /sync-ai slash command 定義
+    sync-skills.md # /sync-skills slash command 定義
 ```
