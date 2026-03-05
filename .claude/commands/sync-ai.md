@@ -18,6 +18,8 @@
 4. 若全部一致：顯示「同步完成（無差異）」
 
 5. 若有差異：針對每個有差異的檔案顯示 diff（標明檔名），然後使用 AskUserQuestion 詢問策略，選項為：「1. 用本機設定覆蓋雲端」、「2. 用雲端設定覆蓋本機」、「3. 取消」
-   - 若選「1. 用本機設定覆蓋雲端」：將本機的對應檔案複製到 repo 的 `claude/` 目錄，顯示 diff，提示使用者自行決定是否 commit 與 push
+   - 若選「1. 用本機設定覆蓋雲端」：將本機的對應檔案複製到 repo 的 `claude/` 目錄，顯示 diff，再使用 AskUserQuestion 詢問「是否自動 commit 並 push？」，選項為「1. 自動 commit 並 push」、「2. 自行處理」
+     - 若選「1. 自動 commit 並 push」：執行 `git add`、`git commit`（訊息格式：`sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`）、`git push`
+     - 若選「2. 自行處理」：不執行任何 git 操作，提示使用者自行 commit 與 push
    - 若選「2. 用雲端設定覆蓋本機」：將 repo 版複製到本機
    - 若選「3. 取消」：不執行任何操作
