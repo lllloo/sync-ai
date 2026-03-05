@@ -69,8 +69,8 @@ npx skills add <source> -g --skill <name> --agent claude-code
      typescript-types — ⚠️ repo 有，本機缺少
    ```
 3. 若有差異：詢問策略
-   - **1. 用本機設定覆蓋雲端**：將本機全域 skills 安裝到 repo（更新 `skills-lock.json`），詢問是否自動 commit 並 push
-   - **2. 用雲端設定覆蓋本機**：對缺少的 skills 執行 `npx skills add <source> -g --skill <name> --agent claude-code`
+   - **1. 更新 skills-lock.json（以本機為準）**：將本機全域 skills 寫入 `skills-lock.json`，詢問是否自動 commit 並 push
+   - **2. 補裝缺少的 skills（以雲端為準）**：對缺少的 skills 執行 `npx skills add <source> -g --skill <name> --agent claude-code`
    - **3. 取消**：不執行任何操作
 
 ### 注意事項

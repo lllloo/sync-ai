@@ -42,7 +42,7 @@ Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝
 流程：
 1. 讀取 `skills-lock.json`，與 `npx skills list -g` 比對
 2. 顯示差異摘要
-3. 若有差異：詢問策略（用本機覆蓋雲端 / 用雲端覆蓋本機 / 取消）
+3. 若有差異：詢問策略（更新 skills-lock.json / 補裝缺少的 skills / 取消）
 
 ## 注意事項
 
