@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `~/.claude/settings.json`
 - 全域 skills（`npx skills list -g` ↔ `skills-lock.json`）
 
-Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄 repo 專案層級已安裝的 skills，同步時與全域安裝狀態比對，缺少的 skills 以 `npx skills add -g --agent claude-code` 補裝。
+Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄 repo 專案層級已安裝的 skills，與全域安裝狀態比對，缺少的 skills 以 `npx skills add -g --agent claude-code` 補裝。
 
 ## 檔案結構
 
@@ -20,29 +20,29 @@ Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
 | `skills-lock.json` | repo 專案層級的 skills 安裝清單，作為全域同步的 source of truth |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 定義 |
+| `.claude/commands/sync-skills.md` | `/sync-skills` slash command 定義 |
 
 ## Slash Commands
 
-### `/sync-ai` — 日常同步
+### `/sync-ai` — 日常設定同步
 
-日常使用，比對本機與 repo 差異並同步。
+比對本機與 repo 的 config 檔案差異並同步（不含 skills）。
 
 流程：
 1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
-2. 逐檔比對本機與 repo 的所有同步項目：
-   - CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
+2. 逐檔比對 CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
    - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
-   - skills：讀取 repo `skills-lock.json`，與 `npx skills list -g` 比對
 3. 顯示逐項狀態摘要（✅ 一致 / ⚠️ 有差異）
-4. 若全部一致：顯示「同步完成（無差異）」
-5. 若有差異：顯示說明，詢問策略
-   - **1. 用本機設定覆蓋雲端**：
-     - 檔案：複製本機版到 repo `claude/`
-     - skills：將本機全域 skills 安裝到 repo（專案層級），更新 `skills-lock.json`
-   - **2. 用雲端設定覆蓋本機**：
-     - 檔案：複製 repo 版到本機
-     - skills：對缺少的 skills 執行 `npx skills add <source> -g --skill <name> --agent claude-code`
-   - **3. 取消**：不執行任何操作
+4. 若有差異：詢問策略（用本機覆蓋雲端 / 用雲端覆蓋本機 / 取消）
+
+### `/sync-skills` — Skills 同步
+
+專門比對本機全域 skills 與 repo `skills-lock.json` 的差異並同步。
+
+流程：
+1. 讀取 `skills-lock.json`，與 `npx skills list -g` 比對
+2. 顯示差異摘要
+3. 若有差異：詢問策略（用本機覆蓋雲端 / 用雲端覆蓋本機 / 取消）
 
 ## 注意事項
 
