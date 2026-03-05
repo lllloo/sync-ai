@@ -29,6 +29,6 @@
    - 若選「3. 取消」：不執行任何操作
 
    **skills：**
-   - 若選「1. 用本機設定覆蓋雲端」：執行 `npx skills add <source> --skill <name> --agent claude-code` 將本機全域 skills 安裝到 repo（專案層級），更新 `skills-lock.json`，再詢問是否自動 commit 並 push
-   - 若選「2. 用雲端設定覆蓋本機」：對 repo `skills-lock.json` 中每個缺少的 skill，執行 `npx skills add <source> -g --skill <name> --agent claude-code` 安裝到全域
+   - 若選「1. 用本機設定覆蓋雲端」：執行 `npx skills add <source> -y --skill <name> --agent claude-code` 將本機全域 skills 安裝到 repo（專案層級），更新 `skills-lock.json`，再詢問是否自動 commit 並 push
+   - 若選「2. 用雲端設定覆蓋本機」：對 repo `skills-lock.json` 中每個缺少的 skill，執行 `npx skills add <source> -g -y --skill <name> --agent claude-code` 安裝到全域
    - 若選「3. 取消」：不執行任何操作
