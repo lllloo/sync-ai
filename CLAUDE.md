@@ -20,29 +20,25 @@ Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
 | `skills-lock.json` | 欲在各裝置全域安裝的 skills 清單，作為跨裝置同步的 source of truth |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 定義 |
-| `.claude/commands/sync-skills.md` | `/sync-skills` slash command 定義 |
 
 ## Slash Commands
 
-### `/sync-ai` — 日常設定同步
+### `/sync-ai` — 統一設定與 Skills 同步
 
-比對本機與 repo 的 config 檔案差異並同步（不含 skills）。
+比對本機與 repo 的設定檔與 skills 差異並同步。整合了設定檔（CLAUDE.md、settings.json）和 skills 同步流程。
 
 流程：
 1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
-2. 逐檔比對 CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
-   - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
-3. 顯示逐項狀態摘要（✅ 一致 / ⚠️ 有差異）
-4. 若有差異：詢問策略（用本機覆蓋雲端 / 用雲端覆蓋本機 / 取消）
-
-### `/sync-skills` — Skills 同步
-
-專門比對本機全域 skills 與 repo `skills-lock.json` 的差異並同步。
-
-流程：
-1. 讀取 `skills-lock.json`，與 `npx skills list -g` 比對
-2. 顯示差異摘要
-3. 若有差異：詢問策略（更新 skills-lock.json / 補裝缺少的 skills / 取消）
+2. 逐檔比對：
+   - **設定檔**：CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
+     - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
+   - **Skills**：本機全域 skills（`npx skills list -g`）與 `skills-lock.json` 比對
+3. 顯示 dry-run 預覽（包含具體 diff 和 skills 清單）
+4. 若全部一致：顯示完成訊息
+5. 若有差異：依序詢問設定檔和 skills 同步策略
+   - 設定檔：用本機覆蓋雲端 / 用雲端覆蓋本機 / 跳過
+   - Skills：更新 skills-lock.json / 補裝缺少的 skills / 跳過
+6. 若有 repo 變更，詢問是否自動 commit 並 push
 
 ## 注意事項
 

@@ -34,44 +34,39 @@ npx skills add <source> -g -y --skill <name> --agent claude-code
 /sync-ai
 ```
 
-同步 skills：
-
-```
-/sync-skills
-```
+此命令會統一同步設定檔（CLAUDE.md、settings.json）和 skills。
 
 ## 同步邏輯
 
-### `/sync-ai` — config 檔案同步
+### `/sync-ai` — 統一設定與 Skills 同步
 
-1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
-2. 逐檔比對 CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
-   - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
-3. 顯示逐項狀態摘要：
+1. **Git 準備**：執行 `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
+
+2. **Dry-run 比對**：
+   - 設定檔：比對 CLAUDE.md 和 settings.json（忽略 `model`、`effortLevel` 欄位）
+   - Skills：比對本機全域 skills 與 `skills-lock.json`
+
+3. **顯示預覽**（包含具體 diff 和 skills 清單）：
    ```
-   📋 同步狀態：
+   📋 同步狀態預覽：
      CLAUDE.md     — ✅ 一致
      settings.json — ⚠️ 有差異
+     Skills        — ⚠️ 有差異
    ```
-4. 若全部一致：顯示「同步完成（無差異）」
-5. 若有差異：詢問策略
-   - **1. 用本機設定覆蓋雲端**：複製本機版到 repo `claude/`，詢問是否自動 commit 並 push
+
+4. **設定檔同步**（若有差異）：
+   - **1. 用本機設定覆蓋雲端**：複製本機版到 repo `claude/`
    - **2. 用雲端設定覆蓋本機**：複製 repo 版到本機
-   - **3. 取消**：不執行任何操作
+   - **3. 跳過**：繼續到 skills 同步
 
-### `/sync-skills` — Skills 同步
+5. **Skills 同步**（若有差異）：
+   - **1. 更新 skills-lock.json**（以本機為準）：將本機全域 skills 寫入 `skills-lock.json`
+   - **2. 補裝缺少的 skills**（以雲端為準）：執行 `npx skills add <source> -g -y --skill <name> --agent claude-code`
+   - **3. 跳過**：不執行任何操作
 
-1. 讀取 repo `skills-lock.json`，與 `npx skills list -g` 比對
-2. 顯示差異摘要：
-   ```
-   📋 Skills 同步狀態：
-     frontend-design — ✅ 一致
-     typescript-types — ⚠️ repo 有，本機缺少
-   ```
-3. 若有差異：詢問策略
-   - **1. 更新 skills-lock.json（以本機為準）**：將本機全域 skills 寫入 `skills-lock.json`，詢問是否自動 commit 並 push
-   - **2. 補裝缺少的 skills（以雲端為準）**：對缺少的 skills 執行 `npx skills add <source> -g -y --skill <name> --agent claude-code`
-   - **3. 取消**：不執行任何操作
+6. **Commit & Push**（若有 repo 變更）：
+   - 使用 AskUserQuestion 詢問是否自動 commit 並 push
+   - 訊息格式：`sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`
 
 ### 注意事項
 
@@ -88,6 +83,5 @@ claude/
 skills-lock.json   # skills 安裝清單（source of truth）
 .claude/
   commands/
-    sync-ai.md     # /sync-ai slash command 定義
-    sync-skills.md # /sync-skills slash command 定義
+    sync-ai.md     # /sync-ai slash command 定義（整合設定檔與 skills 同步）
 ```
