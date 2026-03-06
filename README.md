@@ -23,7 +23,7 @@ clone 後，請 Claude 執行初始化：
 初始化時，Claude 會讀取 `skills-lock.json`，對每個 skill 執行：
 
 ```bash
-npx skills add <source> -g --skill <name> --agent claude-code
+npx skills add <source> -g -y --skill <name> --agent claude-code
 ```
 
 ### 日常同步

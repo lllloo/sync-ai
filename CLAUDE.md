@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `~/.claude/settings.json`
 - 全域 skills（`npx skills list -g` ↔ `skills-lock.json`）
 
-Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄 repo 專案層級已安裝的 skills，與全域安裝狀態比對，缺少的 skills 以 `npx skills add -g --agent claude-code` 補裝。
+Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄欲在各裝置全域安裝的 skills 清單（source of truth），與本機 `npx skills list -g` 比對，缺少的 skills 以 `npx skills add <source> -g --skill <name> --agent claude-code` 補裝。
 
 ## 檔案結構
 
@@ -18,7 +18,7 @@ Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝
 |------|------|
 | `claude/CLAUDE.md` | 同步的全域 Claude 指示，對應 `~/.claude/CLAUDE.md` |
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
-| `skills-lock.json` | repo 專案層級的 skills 安裝清單，作為全域同步的 source of truth |
+| `skills-lock.json` | 欲在各裝置全域安裝的 skills 清單，作為跨裝置同步的 source of truth |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 定義 |
 | `.claude/commands/sync-skills.md` | `/sync-skills` slash command 定義 |
 
