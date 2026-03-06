@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 
-此 repo 是 Claude Code 跨裝置設定同步工具，透過私有 Git repo 同步 `~/.claude/CLAUDE.md` 與 `~/.claude/settings.json`，讓多台裝置的 Claude Code 設定保持一致。
+此 repo 是 Claude Code 跨裝置設定同步工具，透過私有 Git repo 讓多台裝置的 Claude Code 設定保持一致。目前支援同步以下項目：
+
+- `~/.claude/CLAUDE.md`
+- `~/.claude/settings.json`
+- 全域 skills（`npx skills list -g` ↔ `skills-lock.json`）
+
+Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄欲在各裝置全域安裝的 skills 清單（source of truth），與本機 `npx skills list -g` 比對，缺少的 skills 以 `npx skills add <source> -g --skill <name> --agent claude-code` 補裝。
 
 ## 檔案結構
 
@@ -12,27 +18,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|------|
 | `claude/CLAUDE.md` | 同步的全域 Claude 指示，對應 `~/.claude/CLAUDE.md` |
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
+| `skills-lock.json` | 欲在各裝置全域安裝的 skills 清單，作為跨裝置同步的 source of truth |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 定義 |
+| `.claude/commands/sync-skills.md` | `/sync-skills` slash command 定義 |
 
 ## Slash Commands
 
-### `/sync-ai` — 日常同步
+### `/sync-ai` — 日常設定同步
 
-日常使用，比對本機與 repo 差異並同步。
+比對本機與 repo 的 config 檔案差異並同步（不含 skills）。
 
 流程：
 1. `git fetch`，若 remote 有新 commit 詢問是否 `git pull --ff-only`
-2. 逐檔比對 `~/.claude/` 與 `claude/` 的 CLAUDE.md 與 settings.json
-   - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`），同步時仍複製完整檔案
-3. 顯示逐檔狀態摘要（✅ 一致 / ⚠️ 有差異）
-4. 若全部一致：顯示「同步完成（無差異）」
-5. 若有差異：顯示各檔 diff（標明檔名），詢問策略
-   - **1. 用本機設定覆蓋雲端**：將本機版複製到 repo 的 `claude/` 目錄，顯示 diff，由使用者自行決定是否 commit 與 push
-   - **2. 用雲端設定覆蓋本機**：直接複製 repo 版到本機
-   - **3. 取消**：不執行任何操作
+2. 逐檔比對 CLAUDE.md、settings.json（`~/.claude/` ↔ `claude/`）
+   - settings.json 比對時忽略裝置特定欄位（`model`、`effortLevel`）
+3. 顯示逐項狀態摘要（✅ 一致 / ⚠️ 有差異）
+4. 若有差異：詢問策略（用本機覆蓋雲端 / 用雲端覆蓋本機 / 取消）
+
+### `/sync-skills` — Skills 同步
+
+專門比對本機全域 skills 與 repo `skills-lock.json` 的差異並同步。
+
+流程：
+1. 讀取 `skills-lock.json`，與 `npx skills list -g` 比對
+2. 顯示差異摘要
+3. 若有差異：詢問策略（更新 skills-lock.json / 補裝缺少的 skills / 取消）
 
 ## 注意事項
 
 - diff 方向：`-` 為 repo 版、`+` 為本機版
 - `claude/settings.json` 不含 hook，同步到新裝置不會影響其他專案
 - settings.json 的 `model` 與 `effortLevel` 為裝置特定設定，比對時自動忽略
+- `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
