@@ -66,18 +66,94 @@
 
 然後結束執行，不再詢問任何操作。
 
-## 步驟 4：執行 — 設定檔同步
+## 步驟 4：執行 — 設定檔同步（Smart Merge）
 
-若有設定檔差異（CLAUDE.md 或 settings.json），使用 AskUserQuestion 詢問策略：
+若有設定檔差異（CLAUDE.md 或 settings.json），進行以下操作：
 
-**選項：**
-- **1. 用本機設定覆蓋雲端**：
-  - 複製本機 `~/.claude/CLAUDE.md` 和 `~/.claude/settings.json` 到 repo 的 `claude/` 目錄
-  - 顯示 `✅ 已更新 repo 設定檔`
-- **2. 用雲端設定覆蓋本機**：
-  - 複製 repo `claude/CLAUDE.md` 和 `claude/settings.json` 到本機 `~/.claude/`
-  - 顯示 `✅ 已更新本機設定檔`
-- **3. 跳過**：不執行任何操作，繼續到 skills 同步步驟
+### 4a. 偵測並分析衝突
+
+#### CLAUDE.md 衝突分析
+- 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
+- 列出所有差異行（包含上下文）：
+  ```
+  📌 CLAUDE.md 差異行（共 3 處）：
+
+  第 5 行：
+  - ## 語言規範（repo 版）
+  + ## Language Rules（本機版）
+
+  第 8 行：
+  - **一律使用繁體中文**撰寫所有內容
+  + **Always use Traditional Chinese**
+
+  第 15 行：
+  - `npm run build` / `yarn build` / `pnpm build`
+  + `npm build` / `yarn build`
+  ```
+
+#### settings.json 衝突分析
+- 載入 repo `claude/settings.json` 和本機 `~/.claude/settings.json` JSON
+- 移除裝置特定欄位（`model`、`effortLevel`）
+- 列出所有差異欄位：
+  ```
+  📌 settings.json 差異（已排除 model、effortLevel）：
+    • autoSave：repo 值 false | 本機值 true
+    • theme：repo 值 "dark" | 本機值 "light"
+  ```
+
+### 4b. 逐項詢問衝突
+
+#### CLAUDE.md 衝突解決
+- 對每個差異行詢問一次（使用 AskUserQuestion，multiSelect false）：
+  ```
+  「第 <line> 行衝突，選擇保留版本？」
+    1. 用本機版：<local_line>
+    2. 用 repo 版：<repo_line>
+  ```
+- 詢問順序：按行號遞增
+- 無差異行：自動保留（不詢問）
+
+#### settings.json 衝突解決
+- 對每個差異欄位詢問一次（使用 AskUserQuestion，multiSelect false）：
+  ```
+  「<key> 欄位衝突，選擇保留值？」
+    1. 用本機值：<local_value>
+    2. 用 repo 值：<repo_value>
+  ```
+- 只有 repo 有的 key：自動保留 repo 值（不詢問）
+- 只有本機有的 key：自動加入合併結果（不詢問）
+
+### 4c. 寫入合併結果到 repo
+
+- 根據上述選擇，將合併後的內容寫入：
+  - `claude/CLAUDE.md`（按行合併）
+  - `claude/settings.json`（按欄位合併，保留裝置特定欄位的本機原始值）
+- 顯示最終合併結果供確認：
+  ```
+  ✅ 設定已合併至 repo
+
+  合併結果（CLAUDE.md）：
+  ─── 摘要 ───
+  第 5 行：## 語言規範（選本機版）
+  第 8 行：**一律使用繁體中文**撰寫所有內容（選 repo 版）
+  第 15 行：`npm run build` / `yarn build` / `pnpm build`（選 repo 版）
+
+  合併結果（settings.json）：
+  {
+    "theme": "light",     ← 本機版
+    "autoSave": false,    ← repo 版
+    "model": "claude-opus-4-6",  ← 本機版（裝置特定，保留）
+    ...
+  }
+  ```
+
+### 4d. 確認並覆蓋本機
+
+- 詢問「確認無誤，是否覆蓋本機設定檔？」
+  - **1. 確認並覆蓋（建議）**：
+    - 將 repo 的 `claude/CLAUDE.md` 和 `claude/settings.json` 複製到 `~/.claude/`
+    - 顯示 `✅ 已覆蓋本機設定檔`
+  - **2. 跳過**：不覆蓋本機，保留 repo 的合併結果（可稍後手動同步本機），繼續到 skills 同步步驟
 
 ## 步驟 5：執行 — Skills 同步
 
