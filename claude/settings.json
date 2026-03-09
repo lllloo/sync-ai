@@ -11,6 +11,7 @@
       "Bash(git fetch:*)",
       "Bash(git pull:*)",
       "Bash(git status:*)",
+      "Bash(gh api:*)",
       "Bash(echo:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
@@ -19,21 +20,28 @@
       "WebSearch"
     ]
   },
-  "enabledPlugins": {
-    "javascript-typescript@claude-code-workflows": true,
-    "code-documentation@claude-code-workflows": true,
-    "debugging-toolkit@claude-code-workflows": true,
-    "cloud-infrastructure@claude-code-workflows": true
-  },
+  "availableModels": [
+    "sonnet",
+    "haiku"
+  ],
+  "enabledPlugins": {},
   "extraKnownMarketplaces": {
     "claude-code-workflows": {
       "source": {
         "source": "github",
         "repo": "wshobson/agents"
       }
+    },
+    "everything-claude-code": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/everything-claude-code"
+      }
     }
   },
   "language": "繁體中文",
   "autoUpdatesChannel": "latest",
-  "availableModels": ["sonnet", "haiku"]
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
 }
