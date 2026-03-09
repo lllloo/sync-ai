@@ -18,8 +18,9 @@
 ### Skills 比對
 
 1. 讀取 repo 的 `skills-lock.json`
-2. 執行 `npx skills list -g` 取得本機全域 skills 清單
-3. 比對兩者差異，分類為：
+2. 執行 `npx skills list -g --agent claude-code` 取得本機**全域** skills 清單（`~/.claude/skills/`）
+3. 執行 `npx skills list --agent claude-code` 取得本機**專案** skills 清單（`.claude/skills/`）
+4. 分別比對 skills-lock.json 與全域、專案的差異，各自分類為：
    - 一致的 skills
    - repo 有、本機缺少的 skills
    - 本機有、repo 缺少的 skills
@@ -52,9 +53,10 @@
 格式示例：
 ```
 📋 Skills 同步詳情：
-  frontend-design   — ✅ 一致
-  typescript-types  — ⚠️ repo 有，本機缺少
-  my-local-skill    — ⚠️ 本機有，repo 缺少
+                      repo    全域(~/.claude)  專案(.claude)
+  frontend-design   — ✅      ✅               ❌ 缺少
+  typescript-types  — ✅      ❌ 缺少          ❌ 缺少
+  my-local-skill    — ❌ 缺少  ✅               ❌ 缺少
 ```
 
 ### 若全部一致
@@ -157,23 +159,45 @@
 
 ## 步驟 5：執行 — Skills 同步
 
-若有 skills 差異，使用 AskUserQuestion 詢問策略：
+若有 skills 差異，分兩個維度詢問：**repo ↔ 全域** 和 **repo ↔ 專案**（若兩者皆有差異則分別詢問）。
+
+### 5a. repo ↔ 全域（`~/.claude/skills/`）
+
+使用 AskUserQuestion 詢問：
 
 **選項：**
 
-### 1. 更新 skills-lock.json（以本機為準）
-- 依據 `npx skills list -g` 的輸出，將本機全域 skills 清單直接寫入 `skills-lock.json`
+#### 1. 以本機全域為準 → 更新 skills-lock.json
+- 依據 `npx skills list -g --agent claude-code` 的輸出，將全域 skills 清單寫入 `skills-lock.json`
 - 顯示 `✅ 已更新 skills-lock.json`
 
-### 2. 補裝缺少的 skills（以雲端為準）
-- 對 repo `skills-lock.json` 中本機缺少的每個 skill：
+#### 2. 以 repo 為準 → 安裝缺少的 skills 到全域
+- 對 `skills-lock.json` 中全域缺少的每個 skill：
   - 執行 `npx skills add <source> -g -y --skill <name> --agent claude-code`
-  - 安裝中：顯示 `⏳ 安裝 <skill-name>...`
-  - 成功：顯示 `✅ 已安裝 <skill-name>`
+  - 安裝中：顯示 `⏳ 安裝 <skill-name> 到全域...`
+  - 成功：顯示 `✅ 已安裝 <skill-name>（全域）`
   - 失敗：顯示 `❌ 安裝失敗：<skill-name>（<錯誤訊息>）`
 
-### 3. 跳過
-- 不執行任何操作，繼續到 commit & push 步驟
+#### 3. 跳過
+
+### 5b. repo ↔ 專案（`.claude/skills/`）
+
+使用 AskUserQuestion 詢問：
+
+**選項：**
+
+#### 1. 以本機專案為準 → 更新 skills-lock.json
+- 依據 `npx skills list --agent claude-code` 的輸出，將專案 skills 清單寫入 `skills-lock.json`
+- 顯示 `✅ 已更新 skills-lock.json`
+
+#### 2. 以 repo 為準 → 安裝缺少的 skills 到專案
+- `experimental_install` 永遠只裝到 `.agents/skills/`（Claude Code 讀不到），因此逐一執行：
+  `npx skills add <source> -y --skill <name> --agent claude-code`
+- 安裝中：顯示 `⏳ 安裝 <skill-name> 到專案...`
+- 成功：顯示 `✅ 已安裝 <skill-name>（專案）`
+- 失敗：顯示 `❌ 安裝失敗：<skill-name>（<錯誤訊息>）`
+
+#### 3. 跳過
 
 ## 步驟 6：Commit & Push
 

@@ -12,6 +12,7 @@
       "Bash(git pull:*)",
       "Bash(git status:*)",
       "Bash(gh api:*)",
+      "Bash(gh repo:*)",
       "Bash(echo:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
