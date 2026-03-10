@@ -146,26 +146,28 @@
 - **header**: `第 <line> 行`
 - 選項：
 
-##### 選項 A：用本機版
-- label: `用本機版`
-- description: `~/.claude/CLAUDE.md 的內容`
-- preview:
-  ```
-  第 <line-2> 行  <context_line>
-  第 <line-1> 行  <context_line>
-  ▶ 第 <line> 行  <local_line>        ← 保留此行
-  第 <line+1> 行  <context_line>
-  第 <line+2> 行  <context_line>
-  ```
+**選項順序固定**：repo 版永遠排第一，本機版排第二，不隨建議變動。若某版本為建議，在其 label 加上 `（建議）`。
 
-##### 選項 B：用 repo 版
-- label: `用 repo 版`
+##### 選項 A：用 repo 版
+- label: `用 repo 版` 或 `用 repo 版（建議）`
 - description: `claude/CLAUDE.md 的內容`
 - preview:
   ```
   第 <line-2> 行  <context_line>
   第 <line-1> 行  <context_line>
   ▶ 第 <line> 行  <repo_line>         ← 保留此行
+  第 <line+1> 行  <context_line>
+  第 <line+2> 行  <context_line>
+  ```
+
+##### 選項 B：用本機版
+- label: `用本機版` 或 `用本機版（建議）`
+- description: `~/.claude/CLAUDE.md 的內容`
+- preview:
+  ```
+  第 <line-2> 行  <context_line>
+  第 <line-1> 行  <context_line>
+  ▶ 第 <line> 行  <local_line>        ← 保留此行
   第 <line+1> 行  <context_line>
   第 <line+2> 行  <context_line>
   ```
@@ -181,26 +183,28 @@
 - **header**: `<key>`
 - 選項：
 
-##### 選項 A：用本機值
-- label: `用本機值`
-- description: `~/.claude/settings.json 的值`
-- preview:
-  ```
-  {
-    ...
-    "<key>": <local_value>    ← 保留此值（本機）
-    ...
-  }
-  ```
+**選項順序固定**：repo 值永遠排第一，本機值排第二，不隨建議變動。若某值為建議，在其 label 加上 `（建議）`。
 
-##### 選項 B：用 repo 值
-- label: `用 repo 值`
+##### 選項 A：用 repo 值
+- label: `用 repo 值` 或 `用 repo 值（建議）`
 - description: `claude/settings.json 的值`
 - preview:
   ```
   {
     ...
     "<key>": <repo_value>     ← 保留此值（repo）
+    ...
+  }
+  ```
+
+##### 選項 B：用本機值
+- label: `用本機值` 或 `用本機值（建議）`
+- description: `~/.claude/settings.json 的值`
+- preview:
+  ```
+  {
+    ...
+    "<key>": <local_value>    ← 保留此值（本機）
     ...
   }
   ```
