@@ -37,14 +37,14 @@
 
 格式示例：
 ```
---- repo 版（cloud）
-+++ 本機版（local）
+--- repo（claude/settings.json）
++++ 本機（~/.claude/settings.json）
   "theme": "dark",
 - "autoSave": false,
 + "autoSave": true,
 ```
 
-**注意**：diff 方向為 `-` 表示 repo 版、`+` 表示本機版
+**注意**：diff 方向為 `-` 表示 repo（`claude/`）、`+` 表示本機（`~/.claude/`）
 
 ### 若 Skills 有差異，顯示清單
 
@@ -79,8 +79,8 @@
   📌 CLAUDE.md 差異行（共 3 處）：
 
   第 5 行：
-  - ## 語言規範（repo 版）
-  + ## Language Rules（本機版）
+  - ## 語言規範（claude/CLAUDE.md）
+  + ## Language Rules（~/.claude/CLAUDE.md）
 
   第 8 行：
   - **一律使用繁體中文**撰寫所有內容
@@ -96,9 +96,9 @@
 - 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
 - 列出所有差異欄位：
   ```
-  📌 settings.json 差異（已排除 model、effortLevel）：
-    • autoSave：repo 值 false | 本機值 true
-    • theme：repo 值 "dark" | 本機值 "light"
+  📌 settings.json 差異（已排除 model、effortLevel、statusLine）：
+    • autoSave：claude/ 為 false | ~/.claude/ 為 true
+    • theme：claude/ 為 "dark" | ~/.claude/ 為 "light"
   ```
 
 ### 4.2 逐項詢問衝突
@@ -107,8 +107,8 @@
 - 對每個差異行詢問一次（使用 AskUserQuestion，multiSelect false）：
   ```
   「第 <line> 行衝突，選擇保留版本？」
-    1. 用本機版：<local_line>
-    2. 用 repo 版：<repo_line>
+    1. 用本機版（~/.claude/CLAUDE.md）：<local_line>
+    2. 用 repo 版（claude/CLAUDE.md）：<repo_line>
   ```
 - 詢問順序：按行號遞增
 - 無差異行：自動保留（不詢問）
@@ -117,8 +117,8 @@
 - 對每個差異欄位詢問一次（使用 AskUserQuestion，multiSelect false）：
   ```
   「<key> 欄位衝突，選擇保留值？」
-    1. 用本機值：<local_value>
-    2. 用 repo 值：<repo_value>
+    1. 用本機值（~/.claude/settings.json）：<local_value>
+    2. 用 repo 值（claude/settings.json）：<repo_value>
   ```
 - 只有 repo 有的 key：自動保留 repo 值（不詢問）
 - 只有本機有的 key：自動加入合併結果（不詢問）
@@ -140,9 +140,9 @@
 
   合併結果（settings.json）：
   {
-    "theme": "light",     ← 本機版
-    "autoSave": false,    ← repo 版
-    "model": "claude-opus-4-6",  ← 本機版（裝置特定，保留）
+    "theme": "light",     ← ~/.claude/
+    "autoSave": false,    ← claude/
+    "model": "claude-opus-4-6",  ← ~/.claude/（裝置特定，保留）
     ...
   }
   ```
@@ -219,8 +219,8 @@ sync: 從 <hostname> 同步 skills <YYMMDDHHmm>
 ✅ sync-ai 完成
 
 📋 最終狀態：
-  CLAUDE.md     — 已更新雲端 / 已更新本機 / 無差異
-  settings.json — 已更新雲端 / 已更新本機 / 無差異
+  CLAUDE.md     — 已更新 repo（claude/） / 已更新本機（~/.claude/） / 無差異
+  settings.json — 已更新 repo（claude/） / 已更新本機（~/.claude/） / 無差異
   Skills        — 已安裝 2 個 / 已更新 skills-lock.json / 無差異
 ```
 
