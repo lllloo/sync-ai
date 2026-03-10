@@ -279,85 +279,111 @@
 
 ## 步驟 5：執行 — Skills 同步
 
-若 skills-lock.json 與全域有差異，使用 AskUserQuestion 詢問同步方向。
+若 skills-lock.json 與全域有差異，**對每個有差異的 skill 逐一詢問**（使用 AskUserQuestion，multiSelect false）。
 
-- **question**: `Skills 有差異，請選擇同步方向？`
-- **header**: `Skills 同步`
-- 選項：
+先顯示差異摘要：
+```
+📋 Skills 差異（共 <N> 個），逐一處理：
+```
 
-#### 1. 安裝缺少的 skill（建議）
-- label: `安裝缺少的 skill（建議）`
-- description: `補裝 lock 中本機尚未安裝的 skill，本機多出的另行詢問`
-- preview: 顯示完整 skills 表格，lock 有但本機缺的標 `❌ → ✅ 安裝`，格式：
-  ```
-  skill                        lock    本機(~/.agents)
-  ────────────────────────────────────────────────────
-  create-adaptable-composable  ✅      ✅
-  frontend-design              ✅      ❌ → ✅ 安裝
-  vue-best-practices           ✅      ✅
-  ```
-- 動作：對 lock 中全域缺少的每個 skill 執行：
-  `npx skills add <source> -g -y --skill <name> --agent claude-code`
-- 安裝中：顯示 `⏳ 安裝 <skill-name>...`
-- 成功：顯示 `✅ 已安裝 <skill-name>`
-- 失敗：顯示 `❌ 安裝失敗：<skill-name>（<錯誤訊息>）`
+### 5.1 lock 有、本機缺少的 skill
 
-#### 2. 以本機為準更新 lock
-- label: `以本機為準更新 lock`
-- description: `用本機已安裝的 skills 覆蓋 skills-lock.json，lock 多出的項目會被移除`
-- preview: 顯示完整 skills 表格，本機缺但 lock 有的標 `✅ → ❌ 從 lock 移除`，格式：
-  ```
-  skill                        lock      本機(~/.agents)
-  ──────────────────────────────────────────────────────
-  create-adaptable-composable  ✅        ✅
-  frontend-design              ✅ → ❌   ❌  從 lock 移除
-  vue-best-practices           ✅        ✅
-  ```
-- 動作：將 `npx skills list -g --agent claude-code` 的輸出完整寫入 `skills-lock.json`
-- 完成後顯示 `✅ 已更新 skills-lock.json`
+- **question**: `"<skill-name>" 在 lock 中但本機未安裝，如何處理？`
+- **header**: `<skill-name>`
+- 選項（repo/安裝 排第一）：
 
-#### 3. 跳過
-- label: `跳過`
-- description: `保持現狀，不做任何變更`
-- preview: 顯示完整 skills 表格，所有差異行標 `（保持現狀）`
-
-### 5.1 刪除本機多餘 skills（額外詢問）
-
-**觸發條件**：本機有 skills 不在 lock 中，且上方選擇了「安裝缺少的 skill」或「跳過」（不適用於「以本機為準更新 lock」）。
-
-使用 AskUserQuestion 詢問：
-
-- **question**: `本機有 <N> 個 skill 不在 lock 中，是否刪除？`
-- **header**: `刪除多餘 Skills`
-- 選項：
-
-#### 1. 刪除多餘 skills
-- label: `刪除`
-- description: `移除本機不在 lock 中的 skill`
-- preview: 顯示待刪除清單，格式：
-  ```
-  以下 skill 不在 lock 中，將從本機移除：
-
-  skill                    本機(~/.agents)
-  ──────────────────────────────────────
-  docker-expert            ✅ → ❌ 刪除
-  github-actions-templates ✅ → ❌ 刪除
-  ```
-- 動作：對每個本機多出的 skill 執行 `npx skills remove <name> -g --agent claude-code`
-- 刪除中：顯示 `⏳ 刪除 <skill-name>...`
-- 成功：顯示 `✅ 已刪除 <skill-name>`
-- 失敗：顯示 `❌ 刪除失敗：<skill-name>（<錯誤訊息>）`
-
-#### 2. 保留
-- label: `保留`
-- description: `保持本機現有 skills 不變`
+#### 1. 安裝到本機（同步）
+- label: `安裝到本機（同步）`
+- description: `從 lock 的 source 安裝此 skill 到 ~/.agents/`
 - preview:
   ```
-  以下 skill 保留在本機（不影響 lock）：
+  動作：安裝
 
-  docker-expert            ✅ （保留）
-  github-actions-templates ✅ （保留）
+  npx skills add <source> -g -y --skill <name> --agent claude-code
+
+  安裝後：
+  lock    ✅
+  本機    ❌ → ✅
   ```
+
+#### 2. 從 lock 移除
+- label: `從 lock 移除`
+- description: `將此 skill 從 skills-lock.json 中刪除，本機不安裝`
+- preview:
+  ```
+  動作：從 lock 移除
+
+  lock    ✅ → ❌
+  本機    ❌（不安裝）
+  ```
+
+#### 3. 略過
+- label: `略過`
+- description: `保持現狀，lock 保留但本機不安裝`
+- preview:
+  ```
+  動作：不處理
+
+  lock    ✅（保留）
+  本機    ❌（不安裝）
+  ```
+
+- 執行動作：
+  - 安裝：`npx skills add <source> -g -y --skill <name> --agent claude-code`
+  - 從 lock 移除：更新 `skills-lock.json`，刪除對應 key
+  - 略過：不執行任何操作
+
+### 5.2 本機有、lock 缺少的 skill
+
+- **question**: `"<skill-name>" 已安裝但不在 lock 中，如何處理？`
+- **header**: `<skill-name>`
+- 選項（加入 lock 排第一）：
+
+#### 1. 加入 lock（同步）
+- label: `加入 lock（同步）`
+- description: `將此 skill 寫入 skills-lock.json，供其他裝置同步`
+- preview:
+  ```
+  動作：加入 lock
+
+  lock    ❌ → ✅
+  本機    ✅（保留）
+  ```
+
+#### 2. 從本機刪除
+- label: `從本機刪除`
+- description: `從 ~/.agents/ 移除此 skill，lock 不新增`
+- preview:
+  ```
+  動作：刪除本機
+
+  npx skills remove <name> -g --agent claude-code
+
+  lock    ❌（不新增）
+  本機    ✅ → ❌
+  ```
+
+#### 3. 略過
+- label: `略過`
+- description: `保持現狀，本機保留但不加入 lock`
+- preview:
+  ```
+  動作：不處理
+
+  lock    ❌（不新增）
+  本機    ✅（保留）
+  ```
+
+- 執行動作：
+  - 加入 lock：讀取該 skill 的 source 資訊（`npx skills list -g` 輸出）寫入 `skills-lock.json`
+  - 從本機刪除：`npx skills remove <name> -g --agent claude-code`
+  - 略過：不執行任何操作
+
+- 操作回饋：
+  - 安裝中：`⏳ 安裝 <skill-name>...`
+  - 刪除中：`⏳ 刪除 <skill-name>...`
+  - 成功：`✅ <動作> <skill-name>`
+  - 失敗：`❌ 失敗：<skill-name>（<錯誤訊息>）`
 
 ---
 
