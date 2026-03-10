@@ -12,7 +12,7 @@
 ### 設定檔比對
 
 - **CLAUDE.md**：比對 `~/.claude/CLAUDE.md` 與 `claude/CLAUDE.md` 的完整內容
-- **settings.json**：載入兩邊 JSON，移除裝置特定欄位（`model`、`effortLevel`）後比較
+- **settings.json**：載入兩邊 JSON，移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）後比較
   - 若有差異，將兩邊 JSON 內容（忽略指定欄位）轉成 diff 格式供後續顯示
 
 ### Skills 比對
@@ -70,7 +70,7 @@
 
 若有設定檔差異（CLAUDE.md 或 settings.json），進行以下操作：
 
-### 4a. 偵測並分析衝突
+### 4.1 偵測並分析衝突
 
 #### CLAUDE.md 衝突分析
 - 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
@@ -93,7 +93,7 @@
 
 #### settings.json 衝突分析
 - 載入 repo `claude/settings.json` 和本機 `~/.claude/settings.json` JSON
-- 移除裝置特定欄位（`model`、`effortLevel`）
+- 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
 - 列出所有差異欄位：
   ```
   📌 settings.json 差異（已排除 model、effortLevel）：
@@ -101,7 +101,7 @@
     • theme：repo 值 "dark" | 本機值 "light"
   ```
 
-### 4b. 逐項詢問衝突
+### 4.2 逐項詢問衝突
 
 #### CLAUDE.md 衝突解決
 - 對每個差異行詢問一次（使用 AskUserQuestion，multiSelect false）：
@@ -123,7 +123,7 @@
 - 只有 repo 有的 key：自動保留 repo 值（不詢問）
 - 只有本機有的 key：自動加入合併結果（不詢問）
 
-### 4c. 寫入合併結果到 repo
+### 4.3 寫入合併結果到 repo
 
 - 根據上述選擇，將合併後的內容寫入：
   - `claude/CLAUDE.md`（按行合併）
@@ -147,13 +147,17 @@
   }
   ```
 
-### 4d. 確認並覆蓋本機
+### 4.4 確認並覆蓋本機
 
-- 詢問「確認無誤，是否覆蓋本機設定檔？」
-  - **1. 確認並覆蓋（建議）**：
-    - 將 repo 的 `claude/CLAUDE.md` 和 `claude/settings.json` 複製到 `~/.claude/`
-    - 顯示 `✅ 已覆蓋本機設定檔`
-  - **2. 跳過**：不覆蓋本機，保留 repo 的合併結果（可稍後手動同步本機），繼續到 skills 同步步驟
+**先判斷是否需要覆蓋**：比對合併結果與本機現有內容是否相同。
+- 若合併結果 === 本機內容（例如：差異全來自「本機獨有 key 自動加入」，或所有衝突均選了本機版）：
+  - 顯示 `ℹ️ 本機設定已是最新，無需覆蓋` 並直接跳至步驟 5
+- 若合併結果 ≠ 本機內容：
+  - 詢問「確認無誤，是否覆蓋本機設定檔？」
+    - **1. 確認並覆蓋（建議）**：
+      - 將 repo 的 `claude/CLAUDE.md` 和 `claude/settings.json` 複製到 `~/.claude/`
+      - 顯示 `✅ 已覆蓋本機設定檔`
+    - **2. 跳過**：不覆蓋本機，保留 repo 的合併結果（可稍後手動同步本機），繼續到 skills 同步步驟
 
 ## 步驟 5：執行 — Skills 同步
 
@@ -224,5 +228,5 @@ sync: 從 <hostname> 同步 skills <YYMMDDHHmm>
 
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
-- **json 比對**：忽略 `model` 和 `effortLevel` 欄位，比較其他所有鍵值
+- **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值
 - **Skills 來源**：從 `skills-lock.json` 中取得 `<source>`，格式為 `<owner>/<name>` 或完整 URL
