@@ -15,6 +15,11 @@
       "source": "vuejs-ai/skills",
       "sourceType": "github",
       "computedHash": "3df585ad31aec78fe55c56c1411262737e6b231677a3153dec512a882fde80cd"
+    },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "dfb0cb0957ebc8813b0b54b45615ca25293a4ed9991abff0c6c9deb6dd97c2c7"
     }
   }
 }
