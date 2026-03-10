@@ -283,7 +283,7 @@
 
 #### 1. 安裝缺少的 skill（建議）
 - label: `安裝缺少的 skill（建議）`
-- description: `補裝 lock 中本機尚未安裝的 skill，本機多出的保持不動`
+- description: `補裝 lock 中本機尚未安裝的 skill，本機多出的另行詢問`
 - preview: 顯示完整 skills 表格，lock 有但本機缺的標 `❌ → ✅ 安裝`，格式：
   ```
   skill                        lock    本機(~/.agents)
@@ -316,6 +316,44 @@
 - label: `跳過`
 - description: `保持現狀，不做任何變更`
 - preview: 顯示完整 skills 表格，所有差異行標 `（保持現狀）`
+
+### 5.1 刪除本機多餘 skills（額外詢問）
+
+**觸發條件**：本機有 skills 不在 lock 中，且上方選擇了「安裝缺少的 skill」或「跳過」（不適用於「以本機為準更新 lock」）。
+
+使用 AskUserQuestion 詢問：
+
+- **question**: `本機有 <N> 個 skill 不在 lock 中，是否刪除？`
+- **header**: `刪除多餘 Skills`
+- 選項：
+
+#### 1. 刪除多餘 skills
+- label: `刪除`
+- description: `移除本機不在 lock 中的 skill`
+- preview: 顯示待刪除清單，格式：
+  ```
+  以下 skill 不在 lock 中，將從本機移除：
+
+  skill                    本機(~/.agents)
+  ──────────────────────────────────────
+  docker-expert            ✅ → ❌ 刪除
+  github-actions-templates ✅ → ❌ 刪除
+  ```
+- 動作：對每個本機多出的 skill 執行 `npx skills remove <name> -g --agent claude-code`
+- 刪除中：顯示 `⏳ 刪除 <skill-name>...`
+- 成功：顯示 `✅ 已刪除 <skill-name>`
+- 失敗：顯示 `❌ 刪除失敗：<skill-name>（<錯誤訊息>）`
+
+#### 2. 保留
+- label: `保留`
+- description: `保持本機現有 skills 不變`
+- preview:
+  ```
+  以下 skill 保留在本機（不影響 lock）：
+
+  docker-expert            ✅ （保留）
+  github-actions-templates ✅ （保留）
+  ```
 
 ---
 
