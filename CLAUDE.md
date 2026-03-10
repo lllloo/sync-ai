@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `~/.claude/settings.json`
 - 全域 skills（`npx skills list -g` ↔ `skills-lock.json`）
 
-Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄欲在各裝置全域安裝的 skills 清單（source of truth），與本機 `npx skills list -g` 比對，缺少的 skills 以 `npx skills add <source> -g --skill <name> --agent claude-code` 補裝。
+Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝與管理。`skills-lock.json` 記錄欲在各裝置全域安裝的 skills 清單（source of truth），與本機 `npx skills list -g` 比對。有差異時永遠先詢問方向：
+- lock 有、全域缺少 → 可補裝到全域（新電腦補裝）
+- 全域有、lock 缺少 → 可更新 lock（記錄本機新增的 skill）
 
 ## 檔案結構
 
@@ -37,7 +39,7 @@ Skills 透過 [vercel-labs/skills](https://github.com/vercel-labs/skills) 安裝
 4. 若全部一致：顯示完成訊息
 5. 若有差異：依序詢問設定檔和 skills 同步策略
    - 設定檔：用本機覆蓋雲端 / 用雲端覆蓋本機 / 跳過
-   - Skills：更新 skills-lock.json / 補裝缺少的 skills / 跳過
+   - Skills：以 lock 為主補裝到全域 / 以全域為主更新 lock / 跳過
 6. 若有 repo 變更，詢問是否自動 commit 並 push
 
 ## 注意事項

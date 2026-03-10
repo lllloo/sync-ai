@@ -59,10 +59,10 @@ npx skills add <source> -g -y --skill <name> --agent claude-code
    - **2. 用雲端設定覆蓋本機**：複製 repo 版到本機
    - **3. 跳過**：繼續到 skills 同步
 
-5. **Skills 同步**（若有差異）：
-   - **1. 更新 skills-lock.json**（以本機為準）：將本機全域 skills 寫入 `skills-lock.json`
-   - **2. 補裝缺少的 skills**（以雲端為準）：執行 `npx skills add <source> -g -y --skill <name> --agent claude-code`
-   - **3. 跳過**：不執行任何操作
+5. **Skills 同步**（若有差異，詢問同步方向）：
+   - **1. 以 lock 為主 → 補裝缺少的 skills 到全域**（新機器，或全域有不想要的 skill）
+   - **2. 以全域為主 → 更新 skills-lock.json**（本機新增了 skill 要記錄）
+   - **3. 跳過**
 
 6. **Commit & Push**（若有 repo 變更）：
    - 使用 AskUserQuestion 詢問是否自動 commit 並 push
@@ -73,6 +73,53 @@ npx skills add <source> -g -y --skill <name> --agent claude-code
 - diff 方向：`-` 為 repo 版、`+` 為本機版
 - settings.json 的 `model` 與 `effortLevel` 為裝置特定設定，比對時自動忽略
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
+
+## 流程圖
+
+```mermaid
+flowchart TD
+    Start(["/sync-ai 開始"]) --> Fetch["git fetch"]
+    Fetch --> HasNew{"Remote 有新 commit？"}
+    HasNew -- 是 --> AskPull{"詢問是否 git pull？"}
+    AskPull -- Pull --> Pull["git pull --ff-only"]
+    Pull --> PullFail{"Pull 成功？"}
+    PullFail -- 否 --> StopPull(["❌ Pull 失敗，停止執行"])
+    PullFail -- 是 --> Compare
+    AskPull -- 略過 --> Compare
+    HasNew -- 否 --> Compare
+
+    Compare["🔍 Dry-run 比對<br/>CLAUDE.md / settings.json / 全域 skills"]
+    Compare --> AllOK{"全部一致？"}
+    AllOK -- 是 --> Done(["✅ 同步完成（無差異）"])
+    AllOK -- 否 --> ShowDiff["顯示差異摘要與 diff 預覽"]
+
+    ShowDiff --> HasConfigDiff{"設定檔有差異？<br/>CLAUDE.md / settings.json"}
+    HasConfigDiff -- 是 --> MergeConflict["逐項詢問衝突<br/>本機版 vs repo 版"]
+    MergeConflict --> WriteRepo["寫入合併結果到 repo<br/>claude/CLAUDE.md<br/>claude/settings.json"]
+    WriteRepo --> AskOverwrite{"覆蓋本機設定檔？"}
+    AskOverwrite -- 確認 --> CopyLocal["複製 repo 版到 ~/.claude/"]
+    AskOverwrite -- 跳過 --> SkillsSync
+    CopyLocal --> SkillsSync
+    HasConfigDiff -- 否 --> SkillsSync
+
+    SkillsSync{"skills-lock.json ↔ 全域<br/>有差異？"}
+    SkillsSync -- 是 --> AskSkills{"詢問同步方向"}
+    AskSkills -- "以 lock 為主 → 補裝到全域" --> InstallGlobal["npx skills add ... -g -y"]
+    AskSkills -- "以全域為主 → 更新 lock" --> UpdateLock["更新 skills-lock.json"]
+    AskSkills -- 跳過 --> CheckChanges
+    InstallGlobal --> CheckChanges
+    UpdateLock --> CheckChanges
+    SkillsSync -- 否 --> CheckChanges
+
+    CheckChanges{"Repo 有變更？"}
+    CheckChanges -- 是 --> AskCommit{"詢問 commit & push"}
+    AskCommit -- "自動 commit + push" --> CommitPush["git add<br/>git commit<br/>git push"]
+    CommitPush --> Summary
+    AskCommit -- 自行處理 --> Summary
+    CheckChanges -- 否 --> Summary
+
+    Summary(["✅ sync-ai 完成<br/>顯示最終狀態摘要"])
+```
 
 ## 檔案結構
 

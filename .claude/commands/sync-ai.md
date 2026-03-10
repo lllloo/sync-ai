@@ -17,13 +17,11 @@
 
 ### Skills 比對
 
-1. 讀取 repo 的 `skills-lock.json`
-2. 執行 `npx skills list -g --agent claude-code` 取得本機**全域** skills 清單（`~/.claude/skills/`）
-3. 執行 `npx skills list --agent claude-code` 取得本機**專案** skills 清單（`.claude/skills/`）
-4. 分別比對 skills-lock.json 與全域、專案的差異，各自分類為：
-   - 一致的 skills
-   - repo 有、本機缺少的 skills
-   - 本機有、repo 缺少的 skills
+1. 讀取 `skills-lock.json`
+2. 執行 `npx skills list -g --agent claude-code` 取得**全域** skills（`~/.agents/skills/`）
+3. 比對差異，分類為：
+   - lock 有、全域缺少的 skills（新機器需補裝）
+   - 全域有、lock 缺少的 skills（本機新增，可更新 lock 或忽略）
 
 ## 步驟 3：顯示摘要（Dry-run 預覽）
 
@@ -53,10 +51,10 @@
 格式示例：
 ```
 📋 Skills 同步詳情：
-                      repo    全域(~/.claude)  專案(.claude)
-  frontend-design   — ✅      ✅               ❌ 缺少
-  typescript-types  — ✅      ❌ 缺少          ❌ 缺少
-  my-local-skill    — ❌ 缺少  ✅               ❌ 缺少
+                    lock    全域(~/.agents)
+  frontend-design — ✅      ✅
+  typescript-types— ✅      ❌ 缺少
+  my-local-skill  — ❌ 缺少  ✅
 ```
 
 ### 若全部一致
@@ -159,45 +157,25 @@
 
 ## 步驟 5：執行 — Skills 同步
 
-若有 skills 差異，分兩個維度詢問：**repo ↔ 全域** 和 **repo ↔ 專案**（若兩者皆有差異則分別詢問）。
-
-### 5a. repo ↔ 全域（`~/.claude/skills/`）
-
-使用 AskUserQuestion 詢問：
+若 skills-lock.json 與全域有差異，使用 AskUserQuestion 詢問同步方向：
 
 **選項：**
 
-#### 1. 以本機全域為準 → 更新 skills-lock.json
-- 依據 `npx skills list -g --agent claude-code` 的輸出，將全域 skills 清單寫入 `skills-lock.json`
-- 顯示 `✅ 已更新 skills-lock.json`
-
-#### 2. 以 repo 為準 → 安裝缺少的 skills 到全域
-- 對 `skills-lock.json` 中全域缺少的每個 skill：
-  - 執行 `npx skills add <source> -g -y --skill <name> --agent claude-code`
-  - 安裝中：顯示 `⏳ 安裝 <skill-name> 到全域...`
-  - 成功：顯示 `✅ 已安裝 <skill-name>（全域）`
-  - 失敗：顯示 `❌ 安裝失敗：<skill-name>（<錯誤訊息>）`
-
-#### 3. 跳過
-
-### 5b. repo ↔ 專案（`.claude/skills/`）
-
-使用 AskUserQuestion 詢問：
-
-**選項：**
-
-#### 1. 以本機專案為準 → 更新 skills-lock.json
-- 依據 `npx skills list --agent claude-code` 的輸出，將專案 skills 清單寫入 `skills-lock.json`
-- 顯示 `✅ 已更新 skills-lock.json`
-
-#### 2. 以 repo 為準 → 安裝缺少的 skills 到專案
-- `experimental_install` 永遠只裝到 `.agents/skills/`（Claude Code 讀不到），因此逐一執行：
-  `npx skills add <source> -y --skill <name> --agent claude-code`
-- 安裝中：顯示 `⏳ 安裝 <skill-name> 到專案...`
-- 成功：顯示 `✅ 已安裝 <skill-name>（專案）`
+#### 1. 以 lock 為主 → 補裝缺少的 skills 到全域（建議）
+- `skills-lock.json` 為 source of truth，全域多出的 skills 不會被加入 lock
+- 對 lock 中全域缺少的每個 skill 執行：
+  `npx skills add <source> -g -y --skill <name> --agent claude-code`
+- 安裝中：顯示 `⏳ 安裝 <skill-name> 到全域...`
+- 成功：顯示 `✅ 已安裝 <skill-name>（全域）`
 - 失敗：顯示 `❌ 安裝失敗：<skill-name>（<錯誤訊息>）`
 
+#### 2. 以全域為主 → 更新 skills-lock.json
+- 將 `npx skills list -g --agent claude-code` 的輸出完整寫入 `skills-lock.json`
+- 顯示 `✅ 已更新 skills-lock.json`
+
 #### 3. 跳過
+
+> **注意**：若 lock 缺少 + 全域多出同時存在，選「以 lock 為主」只補裝缺少的，全域多出的忽略；選「以全域為主」則全部以全域為準更新 lock。
 
 ## 步驟 6：Commit & Push
 
