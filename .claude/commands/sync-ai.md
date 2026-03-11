@@ -471,7 +471,7 @@
   ```
   動作：刪除本機
 
-  npx skills remove <name> -g --agent claude-code
+  npx skills remove <name> -g -y
 
   lock    ❌（不新增）
   本機    ✅ → ❌
@@ -490,7 +490,7 @@
 
 - 執行動作：
   - 加入 lock：從 `npx skills list -g --agent claude-code` 輸出中找到對應 skill 的 source 資訊，以 `skills-lock.json` 格式寫入（見實作細節）
-  - 從本機刪除：`npx skills remove <name> -g --agent claude-code`
+  - 從本機刪除：`npx skills remove <name> -g -y`
   - 略過：不執行任何操作
 
 - 操作回饋：
