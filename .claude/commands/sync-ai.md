@@ -4,6 +4,10 @@
 
 執行 `git fetch` 取得 remote 最新資訊。
 
+**若 `git fetch` 失敗**（無網路、remote 不可達）：顯示警告 `⚠️ git fetch 失敗：<錯誤訊息>`，並使用 AskUserQuestion 詢問是否繼續：
+- 選項 1：`繼續（用現有 repo 狀態）` — 跳過 fetch，繼續執行後續比對
+- 選項 2：`中止` — 停止執行
+
 若 remote 有新 commit，使用 AskUserQuestion 詢問：
 
 - **question**: `Remote 有 <N> 個新 commit，是否同步？`
@@ -22,7 +26,11 @@
   └ 繼續執行後續比對
   ```
 - 動作：執行 `git pull --ff-only`
-- 若 pull 失敗：顯示 `❌ Pull 失敗：<錯誤訊息>` 並停止執行
+- 若 pull 失敗：
+  - 若錯誤訊息包含 `not possible to fast-forward`（本機有超前 commit）：顯示 `⚠️ Pull 失敗：本機有未 push 的 commit，無法 fast-forward。請手動解決後重新執行，或選擇「繼續用本機版本」繼續比對`，並提供選項：
+    - `繼續用本機版本` — 以現有 repo 狀態繼續（等同「略過」）
+    - `中止` — 停止執行
+  - 其他失敗：顯示 `❌ Pull 失敗：<錯誤訊息>` 並停止執行
 
 #### 2. 略過
 - label: `略過，繼續用本機版本`
@@ -47,7 +55,7 @@
 
 ### Skills 比對
 
-1. 讀取 `skills-lock.json`
+1. 讀取 `skills-lock.json`；若檔案不存在，視為空清單（`{ "version": 1, "skills": {} }`）繼續執行
 2. 執行 `npx skills list -g --agent claude-code` 取得**全域** skills（`~/.agents/skills/`）
 3. 比對差異，分類為：
    - lock 有、全域缺少的 skills（新機器需補裝）
@@ -56,12 +64,12 @@
 ### Agents 比對
 
 1. 遞迴掃描 `claude/agents/` 所有 `.md` 檔案，記錄相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）
-2. 遞迴掃描 `~/.claude/agents/` 所有 `.md` 檔案，記錄相對路徑
+2. 遞迴掃描 `~/.claude/agents/` 所有 `.md` 檔案，記錄相對路徑；**若目錄不存在，視為空清單（本機無任何 agent），跳過掃描**
 3. 比對差異，分類為：
    - repo 有、本機缺少（需複製到本機）
    - 本機有、repo 缺少（本機新增，可加入 repo 或刪除）
    - 兩邊都有但內容不同（衝突）
-4. **群組化**：若某 package 目錄下的 **所有** 檔案都處於同一狀態（全部缺少或全部需新增），以整個 package 為單位處理（一次詢問），不逐一詢問每個檔案
+4. **群組化**：若某 package 目錄下的**所有差異檔案**都處於完全相同的狀態（全部為「repo 有本機無」、或全部為「本機有 repo 無」），**且該 package 內無任何衝突項目**，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案
 
 ---
 
@@ -122,7 +130,7 @@
 ✅ 同步完成（無差異）
 ```
 
-然後結束執行，不再詢問任何操作。
+然後**直接結束執行**，不執行步驟 4-8，不再詢問任何操作。
 
 ---
 
@@ -131,6 +139,10 @@
 若有設定檔差異（CLAUDE.md 或 settings.json），進行以下操作：
 
 ### 4.1 偵測並分析衝突
+
+**條件判斷**：
+- 若 CLAUDE.md 無差異 → 跳過 CLAUDE.md 衝突分析與詢問
+- 若 settings.json 無差異 → 跳過 settings.json 衝突分析與詢問
 
 #### CLAUDE.md 衝突分析
 - 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
@@ -249,7 +261,7 @@
 
 對陣列中每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）：
 
-**6.1 只在 repo 的項目**
+**只在 repo 的項目**
 
 - **question**: `"<item>" 只在 repo 的 <key> 中，如何處理？`
 - **header**: `<key>`
@@ -279,7 +291,7 @@
   ]
   ```
 
-**6.2 只在本機的項目**
+**只在本機的項目**
 
 - **question**: `"<item>" 只在本機的 <key> 中，如何處理？`
 - **header**: `<key>`
@@ -477,7 +489,7 @@
   ```
 
 - 執行動作：
-  - 加入 lock：讀取該 skill 的 source 資訊（`npx skills list -g` 輸出）寫入 `skills-lock.json`
+  - 加入 lock：從 `npx skills list -g --agent claude-code` 輸出中找到對應 skill 的 source 資訊，以 `skills-lock.json` 格式寫入（見實作細節）
   - 從本機刪除：`npx skills remove <name> -g --agent claude-code`
   - 略過：不執行任何操作
 
@@ -493,7 +505,7 @@
 
 若 `claude/agents/` 與 `~/.claude/agents/` 有差異，對每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）。
 
-**群組化規則**：若某 package 目錄（如 `awesome-claude-code-subagents/`）下的所有檔案都處於同一狀態（全部缺少或全部需新增），以整個 package 為單位詢問一次；若只有部分差異，則逐一詢問每個差異檔案。
+**群組化規則**：若某 package 目錄（如 `awesome-claude-code-subagents/`）下的**所有差異檔案**都處於完全相同的狀態（全部為「repo 有本機無」、或全部為「本機有 repo 無」），**且該 package 內無任何衝突項目**，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案。
 
 先顯示差異摘要：
 ```
@@ -530,8 +542,8 @@
   本機    ❌ → ✅
   ```
 - 動作：
-  - package 單位：`cp -r claude/agents/<package-name>/ ~/.claude/agents/<package-name>/`
-  - 單一檔案：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`（確保目標目錄存在）
+  - package 單位：`cp -r claude/agents/<package-name>/ ~/.claude/agents/<package-name>/`（若 `~/.claude/agents/` 不存在先 `mkdir -p`）
+  - 單一檔案：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`（確保目標目錄存在，`mkdir -p`）
 
 #### 2. 從 repo 移除
 - label: `從 repo 移除`
@@ -606,6 +618,15 @@
   ```
 
 ### 6.3 兩邊都有但內容不同的 agent
+
+顯示 diff 後再詢問：
+
+```
+📌 <package/agent-name> 差異：
+- <只在 repo 的行...>
++ <只在本機的行...>
+（最多顯示 10 行差異，超過則顯示「...共 N 行差異」）
+```
 
 - **question**: `"<package/agent-name>" 內容不同，保留哪個版本？`
 - **header**: `<package/agent-name>`
@@ -707,7 +728,7 @@
 
 ## 步驟 8：完成摘要
 
-顯示最終同步結果摘要，格式示例：
+若有任何操作執行過，顯示最終同步結果摘要，格式示例：
 ```
 ✅ sync-ai 完成
 
@@ -725,6 +746,19 @@
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
 - **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值
-- **Skills 來源**：從 `skills-lock.json` 中取得 `<source>`，格式為 `<owner>/<name>` 或完整 URL
+- **skills-lock.json 格式**：
+  ```json
+  {
+    "version": 1,
+    "skills": {
+      "<skill-name>": {
+        "source": "<owner>/<repo>",
+        "sourceType": "github",
+        "computedHash": "<hash>"
+      }
+    }
+  }
+  ```
+  加入 lock 時，`source` 和 `sourceType` 從 `npx skills list -g --agent claude-code` 輸出取得（輸出中每個 skill 條目顯示其安裝路徑，source 格式為 `<owner>/<repo>`）；`computedHash` 可省略或留空字串
 - **Agents 路徑**：使用相對於 `claude/agents/` 或 `~/.claude/agents/` 的相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）進行比對
-- **Agents 目錄建立**：複製單一 agent 檔案前，若目標目錄不存在，自動建立（`mkdir -p`）
+- **Agents 目錄建立**：複製 agent 前，若目標目錄不存在，自動建立（`mkdir -p`）；若 `~/.claude/agents/` 本身不存在，同樣自動建立
