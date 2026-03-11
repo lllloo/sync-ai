@@ -109,21 +109,22 @@
 
 #### CLAUDE.md 衝突分析
 - 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
-- 列出所有差異行（包含上下文）：
+- 將相鄰差異行（間距 ≤ 3 行）合併為同一個 hunk，列出所有 hunk（包含上下文）：
   ```
-  📌 CLAUDE.md 差異行（共 3 處）：
+  📌 CLAUDE.md 差異（共 2 個區塊）：
 
-  第 5 行：
-  - ## 語言規範（claude/CLAUDE.md）
-  + ## Language Rules（~/.claude/CLAUDE.md）
+  區塊 1（第 5-5 行）：
+    4  此檔案定義所有專案通用的全域規則與慣例。
+  - 5  ## 語言規範（claude/CLAUDE.md）
+  + 5  ## Language Rules（~/.claude/CLAUDE.md）
+    6  （空行）
 
-  第 8 行：
-  - **一律使用繁體中文**撰寫所有內容
-  + **Always use Traditional Chinese**
-
-  第 15 行：
-  - `npm run build` / `yarn build` / `pnpm build`
-  + `npm build` / `yarn build`
+  區塊 2（第 13-15 行）：
+    12  （空行）
+  - 13  - `npm run build` / `yarn build` / `pnpm build`
+  - 14  - `npm run docs:build` 或其他類似構建命令
+  + 13  - `npm build` / `yarn build`
+    15  （空行）
   ```
 
 #### settings.json 衝突分析
@@ -140,10 +141,10 @@
 
 #### CLAUDE.md 衝突解決
 
-對每個差異行詢問一次（使用 AskUserQuestion，multiSelect false）：
+對每個 hunk 詢問一次（使用 AskUserQuestion，multiSelect false）：
 
-- **question**: `第 <line> 行衝突，保留哪個版本？`
-- **header**: `第 <line> 行`
+- **question**: `第 <start>-<end> 行（區塊 <N>/<total>）衝突，保留哪個版本？`
+- **header**: `區塊 <N>`
 - 選項：
 
 **選項順序固定**：repo 版永遠排第一，本機版排第二，不隨建議變動。若某版本為建議，在其 label 加上 `（建議）`。
@@ -153,11 +154,9 @@
 - description: `claude/CLAUDE.md 的內容`
 - preview:
   ```
-  第 <line-2> 行  <context_line>
-  第 <line-1> 行  <context_line>
-  ▶ 第 <line> 行  <repo_line>         ← 保留此行
-  第 <line+1> 行  <context_line>
-  第 <line+2> 行  <context_line>
+  （顯示 hunk 前 2 行 context）
+  - <repo 版差異行...>    ← 保留此區塊
+  （顯示 hunk 後 2 行 context）
   ```
 
 ##### 選項 B：用本機版
@@ -165,14 +164,13 @@
 - description: `~/.claude/CLAUDE.md 的內容`
 - preview:
   ```
-  第 <line-2> 行  <context_line>
-  第 <line-1> 行  <context_line>
-  ▶ 第 <line> 行  <local_line>        ← 保留此行
-  第 <line+1> 行  <context_line>
-  第 <line+2> 行  <context_line>
+  （顯示 hunk 前 2 行 context）
+  + <本機版差異行...>    ← 保留此區塊
+  （顯示 hunk 後 2 行 context）
   ```
 
-- 詢問順序：按行號遞增
+- 詢問順序：按 hunk 起始行號遞增
+- hunk 內所有行一起替換，不拆分逐行詢問
 - 無差異行：自動保留（不詢問）
 
 #### settings.json 衝突解決
@@ -254,8 +252,8 @@
   ```
   覆蓋以下檔案：
 
-  ~/.claude/CLAUDE.md      ← claude/CLAUDE.md（已合併）
-  ~/.claude/settings.json  ← claude/settings.json（已合併）
+  claude/CLAUDE.md（已合併）      → ~/.claude/CLAUDE.md
+  claude/settings.json（已合併）  → ~/.claude/settings.json
 
   裝置特定欄位（model、effortLevel、statusLine）保持本機值不變
   ```
