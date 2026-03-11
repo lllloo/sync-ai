@@ -50,6 +50,7 @@
   },
   "language": "繁體中文",
   "autoUpdatesChannel": "latest",
+  "spinnerTipsEnabled": false,
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
