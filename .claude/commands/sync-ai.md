@@ -214,7 +214,7 @@
 
 - 根據上述選擇，將合併後的內容寫入：
   - `claude/CLAUDE.md`（按行合併）
-  - `claude/settings.json`（按欄位合併，保留裝置特定欄位的本機原始值）
+  - `claude/settings.json`（按欄位合併；**裝置特定欄位 `model`、`effortLevel`、`statusLine` 不寫入 repo**，只保留在本機）
 - 顯示最終合併結果供確認：
   ```
   ✅ 設定已合併至 repo
@@ -257,7 +257,9 @@
 
   裝置特定欄位（model、effortLevel、statusLine）保持本機值不變
   ```
-- 動作：複製 `claude/CLAUDE.md` 和 `claude/settings.json` 到 `~/.claude/`
+- 動作：
+  1. 複製 `claude/CLAUDE.md` 到 `~/.claude/CLAUDE.md`
+  2. 讀取 `claude/settings.json` 合併結果，再從本機 `~/.claude/settings.json` 取出 `model`、`effortLevel`、`statusLine` 的現有值，注入回合併結果後，寫入 `~/.claude/settings.json`（確保裝置特定欄位不遺失）
 - 完成後顯示 `✅ 已覆蓋本機設定檔`
 
 #### 2. 跳過
