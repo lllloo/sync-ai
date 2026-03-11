@@ -745,7 +745,7 @@
 
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
-- **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值
+- **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值。**比對方式：直接用 `Read` 工具讀取兩個檔案，在 context 內比對**，不要寫腳本或用 `node -e`（在 Windows 環境下不可靠）
 - **skills-lock.json 格式**：
   ```json
   {
