@@ -26,9 +26,12 @@
   └ 繼續執行後續比對
   ```
 - 動作：執行 `git pull --ff-only`
-- 若 pull 失敗：
-  - 若錯誤訊息包含 `not possible to fast-forward`（本機有超前 commit）：顯示 `⚠️ Pull 失敗：本機有未 push 的 commit，無法 fast-forward。請手動解決後重新執行，或選擇「繼續用本機版本」繼續比對`，並提供選項：
+- 若 pull 失敗，依錯誤訊息分類處理：
+  - 若包含 `not possible to fast-forward`（本機有超前 commit）：顯示 `⚠️ Pull 失敗：本機有未 push 的 commit，無法 fast-forward。請手動解決後重新執行，或選擇「繼續用本機版本」繼續比對`，並提供選項：
     - `繼續用本機版本` — 以現有 repo 狀態繼續（等同「略過」）
+    - `中止` — 停止執行
+  - 若包含 `Authentication failed` 或 `Permission denied`（認證失敗）：顯示 `⚠️ Pull 失敗：認證失敗，請檢查 SSH key 或 Git token 設定`，並提供選項：
+    - `繼續用本機版本` — 跳過 pull，以現有 repo 狀態繼續
     - `中止` — 停止執行
   - 其他失敗：顯示 `❌ Pull 失敗：<錯誤訊息>` 並停止執行
 
@@ -69,7 +72,10 @@
    - repo 有、本機缺少（需複製到本機）
    - 本機有、repo 缺少（本機新增，可加入 repo 或刪除）
    - 兩邊都有但內容不同（衝突）
-4. **群組化**：若某 package 目錄下的**所有差異檔案**都處於完全相同的狀態（全部為「repo 有本機無」、或全部為「本機有 repo 無」），**且該 package 內無任何衝突項目**，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案
+4. **群組化**：符合以下**所有條件**時，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案：
+   - 該 package 下的所有差異檔案**同屬一種類型**（全部「repo 有本機無」，或全部「本機有 repo 無」）
+   - 該 package 內**沒有任何「兩邊都有但內容不同」的衝突檔案**
+   - 只要有一個衝突（內容不同），整個 package 改為逐檔詢問
 
 ---
 
@@ -489,7 +495,7 @@
   ```
 
 - 執行動作：
-  - 加入 lock：從 `npx skills list -g --agent claude-code` 輸出中找到對應 skill 的 source 資訊，以 `skills-lock.json` 格式寫入（見實作細節）
+  - 加入 lock：將 skill 寫入 `skills-lock.json`，`source` 填入 `"TODO: <owner>/<repo>"`，`sourceType: "github"`，`computedHash` 留空字串；完成後顯示提示 `⚠️ 請手動補充 skills-lock.json 中 <name> 的 source 欄位（格式：<owner>/<repo>）`
   - 從本機刪除：`npx skills remove <name> -g -y`
   - 略過：不執行任何操作
 
@@ -745,7 +751,19 @@
 
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
-- **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值。**比對方式：直接用 `Read` 工具讀取兩個檔案，在 context 內比對**，不要寫腳本或用 `node -e`（在 Windows 環境下不可靠）
+- **json 比對**：用 `Read` 工具讀取兩個 JSON 檔，在 context 中 parse 後逐欄位比對（deep comparison）：
+  1. 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
+  2. 逐 key 遞迴比較所有欄位值
+  3. **key 順序差異不視為差異**（只比較值）
+  4. 陣列欄位：以項目集合比較（找出只在一邊的項目），順序不同不視為差異
+  5. `null`、`{}`、`[]` 視為不同的值，不自動轉換
+- **`npx skills list -g` 輸出格式**（純文字，無 JSON 選項）：
+  ```
+  <群組名稱>（粗體）
+    <skill-name>  ~/.agents/skills/<skill-name>
+      Agents: Claude Code   （或 "not linked"）
+  ```
+  輸出**不包含 source 資訊**。加入 lock 時，`source` 填入 `"TODO: <owner>/<repo>"` 佔位，並提示用戶事後手動補充
 - **skills-lock.json 格式**：
   ```json
   {
@@ -754,11 +772,11 @@
       "<skill-name>": {
         "source": "<owner>/<repo>",
         "sourceType": "github",
-        "computedHash": "<hash>"
+        "computedHash": ""
       }
     }
   }
   ```
-  加入 lock 時，`source` 和 `sourceType` 從 `npx skills list -g --agent claude-code` 輸出取得（輸出中每個 skill 條目顯示其安裝路徑，source 格式為 `<owner>/<repo>`）；`computedHash` 可省略或留空字串
+  `computedHash` 留空字串（無法自動計算，不影響安裝）
 - **Agents 路徑**：使用相對於 `claude/agents/` 或 `~/.claude/agents/` 的相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）進行比對
 - **Agents 目錄建立**：複製 agent 前，若目標目錄不存在，自動建立（`mkdir -p`）；若 `~/.claude/agents/` 本身不存在，同樣自動建立
