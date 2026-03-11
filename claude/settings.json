@@ -13,6 +13,7 @@
       "Bash(tail:*)",
       "Bash(tr:*)",
       "Bash(wc:*)",
+      "Bash(find*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git diff:*)",
@@ -31,10 +32,7 @@
       "WebSearch"
     ]
   },
-  "availableModels": [
-    "sonnet",
-    "haiku"
-  ],
+  "availableModels": ["sonnet", "haiku"],
   "enabledPlugins": {},
   "extraKnownMarketplaces": {
     "claude-code-workflows": {

@@ -53,6 +53,16 @@
    - lock 有、全域缺少的 skills（新機器需補裝）
    - 全域有、lock 缺少的 skills（本機新增，可更新 lock 或忽略）
 
+### Agents 比對
+
+1. 遞迴掃描 `claude/agents/` 所有 `.md` 檔案，記錄相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）
+2. 遞迴掃描 `~/.claude/agents/` 所有 `.md` 檔案，記錄相對路徑
+3. 比對差異，分類為：
+   - repo 有、本機缺少（需複製到本機）
+   - 本機有、repo 缺少（本機新增，可加入 repo 或刪除）
+   - 兩邊都有但內容不同（衝突）
+4. **群組化**：若某 package 目錄下的 **所有** 檔案都處於同一狀態（全部缺少或全部需新增），以整個 package 為單位處理（一次詢問），不逐一詢問每個檔案
+
 ---
 
 ## 步驟 3：顯示摘要（Dry-run 預覽）
@@ -63,6 +73,7 @@
   CLAUDE.md        — ✅ 一致
   settings.json    — ⚠️ 有差異
   Skills           — ⚠️ 有差異（詳見下方清單）
+  Agents           — ⚠️ 有差異（詳見下方清單）
 ```
 
 ### 若 settings.json 有差異，顯示具體 diff
@@ -88,6 +99,20 @@
   frontend-design              ✅      ✅
   typescript-types             ✅      ❌ 缺少
   my-local-skill               ❌ 缺少  ✅
+```
+
+### 若 Agents 有差異，顯示清單
+
+格式示例：
+```
+📋 Agents 同步詳情：
+  agent                                              repo    本機(~/.claude/agents)
+  ────────────────────────────────────────────────────────────────────────────────
+  awesome-claude-code-subagents/backend-developer    ✅      ✅
+  awesome-claude-code-subagents/docker-expert        ✅      ❌ 缺少
+  everything-claude-code/architect                   ✅      ✅
+  my-custom-package/my-agent                         ❌ 缺少  ✅
+  everything-claude-code/code-reviewer               ⚠️ 衝突  ⚠️ 衝突
 ```
 
 ### 若全部一致
@@ -130,11 +155,17 @@
 #### settings.json 衝突分析
 - 載入 repo `claude/settings.json` 和本機 `~/.claude/settings.json` JSON
 - 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
-- 列出所有差異欄位：
+- 對每個差異欄位，根據值的型別進行分析：
+  - **純量值**（string、number、boolean、object）：整個值視為一個差異
+  - **陣列值**（array）：逐項比較，列出各個差異項目
+- 列出所有差異（含陣列內差異項目）：
   ```
   📌 settings.json 差異（已排除 model、effortLevel、statusLine）：
     • autoSave：claude/ 為 false | ~/.claude/ 為 true
-    • theme：claude/ 為 "dark" | ~/.claude/ 為 "light"
+    • permissions.allow（陣列）：
+      - "Bash(find*)"    只在 repo
+      + "Bash(tr:*)"     只在本機
+      + "Bash(wc:*)"     只在本機
   ```
 
 ### 4.2 逐項詢問衝突
@@ -175,6 +206,10 @@
 
 #### settings.json 衝突解決
 
+根據欄位型別採用不同策略：
+
+##### 純量欄位（string、number、boolean、object）
+
 對每個差異欄位詢問一次（使用 AskUserQuestion，multiSelect false）：
 
 - **question**: `"<key>" 欄位衝突，保留哪個值？`
@@ -183,7 +218,7 @@
 
 **選項順序固定**：repo 值永遠排第一，本機值排第二，不隨建議變動。若某值為建議，在其 label 加上 `（建議）`。
 
-##### 選項 A：用 repo 值
+###### 選項 A：用 repo 值
 - label: `用 repo 值` 或 `用 repo 值（建議）`
 - description: `claude/settings.json 的值`
 - preview:
@@ -195,7 +230,7 @@
   }
   ```
 
-##### 選項 B：用本機值
+###### 選項 B：用本機值
 - label: `用本機值` 或 `用本機值（建議）`
 - description: `~/.claude/settings.json 的值`
 - preview:
@@ -209,6 +244,73 @@
 
 - 只有 repo 有的 key：自動保留 repo 值（不詢問）
 - 只有本機有的 key：自動加入合併結果（不詢問）
+
+##### 陣列欄位（array）
+
+對陣列中每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）：
+
+**6.1 只在 repo 的項目**
+
+- **question**: `"<item>" 只在 repo 的 <key> 中，如何處理？`
+- **header**: `<key>`
+- 選項：
+
+###### 選項 A：保留（建議）
+- label: `保留（建議）`
+- description: `納入合併結果，repo 與本機皆保有此項目`
+- preview:
+  ```
+  "<key>": [
+    ...
+    "<item>"    ← 保留（repo 有，本機將同步）
+    ...
+  ]
+  ```
+
+###### 選項 B：移除
+- label: `移除`
+- description: `從合併結果移除，repo 與本機皆刪除此項目`
+- preview:
+  ```
+  "<key>": [
+    ...
+    // "<item>" 已移除
+    ...
+  ]
+  ```
+
+**6.2 只在本機的項目**
+
+- **question**: `"<item>" 只在本機的 <key> 中，如何處理？`
+- **header**: `<key>`
+- 選項：
+
+###### 選項 A：保留（建議）
+- label: `保留（建議）`
+- description: `納入合併結果，repo 與本機皆保有此項目`
+- preview:
+  ```
+  "<key>": [
+    ...
+    "<item>"    ← 保留（本機有，repo 將同步）
+    ...
+  ]
+  ```
+
+###### 選項 B：移除
+- label: `移除`
+- description: `從合併結果移除，repo 與本機皆刪除此項目`
+- preview:
+  ```
+  "<key>": [
+    ...
+    // "<item>" 已移除
+    ...
+  ]
+  ```
+
+- 兩邊都有的項目：自動保留（不詢問）
+- 合併後陣列順序：先保留兩邊共有的（依 repo 順序），再附加選擇保留的新增項目
 
 ### 4.3 寫入合併結果到 repo
 
@@ -387,9 +489,177 @@
 
 ---
 
-## 步驟 6：Commit & Push
+## 步驟 6：執行 — Agents 同步
 
-若有任何 repo 變更（設定檔或 skills-lock.json），使用 AskUserQuestion 詢問：
+若 `claude/agents/` 與 `~/.claude/agents/` 有差異，對每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）。
+
+**群組化規則**：若某 package 目錄（如 `awesome-claude-code-subagents/`）下的所有檔案都處於同一狀態（全部缺少或全部需新增），以整個 package 為單位詢問一次；若只有部分差異，則逐一詢問每個差異檔案。
+
+先顯示差異摘要：
+```
+📋 Agents 差異（共 <N> 項），逐一處理：
+```
+
+### 6.1 repo 有、本機缺少的 agent（或整個 package）
+
+- **question**（package 單位）: `"<package-name>/" package 在 repo 中但本機缺少，如何處理？`
+- **question**（單一檔案）: `"<package/agent-name>" 在 repo 中但本機缺少，如何處理？`
+- **header**: `<package-name>` 或 `<package/agent-name>`
+- 選項（複製到本機 排第一）：
+
+#### 1. 複製到本機（同步）
+- label: `複製到本機（同步）`
+- description: `將 repo 的 agent 複製到 ~/.claude/agents/`
+- preview（package 單位）:
+  ```
+  動作：複製整個 package
+
+  claude/agents/<package-name>/  →  ~/.claude/agents/<package-name>/
+  （共 <N> 個 agent 檔案）
+
+  repo    ✅
+  本機    ❌ → ✅
+  ```
+- preview（單一檔案）:
+  ```
+  動作：複製檔案
+
+  claude/agents/<path>.md  →  ~/.claude/agents/<path>.md
+
+  repo    ✅
+  本機    ❌ → ✅
+  ```
+- 動作：
+  - package 單位：`cp -r claude/agents/<package-name>/ ~/.claude/agents/<package-name>/`
+  - 單一檔案：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`（確保目標目錄存在）
+
+#### 2. 從 repo 移除
+- label: `從 repo 移除`
+- description: `將此 agent 從 claude/agents/ 中刪除，本機不新增`
+- preview:
+  ```
+  動作：從 repo 移除
+
+  repo    ✅ → ❌
+  本機    ❌（不新增）
+  ```
+- 動作：刪除 `claude/agents/<path>` 對應檔案或目錄
+
+#### 3. 略過
+- label: `略過`
+- description: `保持現狀，repo 保留但本機不新增`
+- preview:
+  ```
+  動作：不處理
+
+  repo    ✅（保留）
+  本機    ❌（不新增）
+  ```
+
+### 6.2 本機有、repo 缺少的 agent（或整個 package）
+
+- **question**（package 單位）: `"<package-name>/" package 已安裝但不在 repo 中，如何處理？`
+- **question**（單一檔案）: `"<package/agent-name>" 已安裝但不在 repo 中，如何處理？`
+- **header**: `<package-name>` 或 `<package/agent-name>`
+- 選項（加入 repo 排第一）：
+
+#### 1. 加入 repo（同步）
+- label: `加入 repo（同步）`
+- description: `將本機 agent 複製到 claude/agents/，供其他裝置同步`
+- preview（package 單位）:
+  ```
+  動作：加入整個 package
+
+  ~/.claude/agents/<package-name>/  →  claude/agents/<package-name>/
+  （共 <N> 個 agent 檔案）
+
+  repo    ❌ → ✅
+  本機    ✅（保留）
+  ```
+- 動作：
+  - package 單位：`cp -r ~/.claude/agents/<package-name>/ claude/agents/<package-name>/`
+  - 單一檔案：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
+
+#### 2. 從本機刪除
+- label: `從本機刪除`
+- description: `從 ~/.claude/agents/ 移除此 agent，repo 不新增`
+- preview:
+  ```
+  動作：刪除本機
+
+  repo    ❌（不新增）
+  本機    ✅ → ❌
+  ```
+- 動作：
+  - package 單位：`rm -rf ~/.claude/agents/<package-name>/`
+  - 單一檔案：`rm ~/.claude/agents/<path>.md`
+
+#### 3. 略過
+- label: `略過`
+- description: `保持現狀，本機保留但不加入 repo`
+- preview:
+  ```
+  動作：不處理
+
+  repo    ❌（不新增）
+  本機    ✅（保留）
+  ```
+
+### 6.3 兩邊都有但內容不同的 agent
+
+- **question**: `"<package/agent-name>" 內容不同，保留哪個版本？`
+- **header**: `<package/agent-name>`
+- 選項（repo 版 排第一）：
+
+#### 1. 用 repo 版（同步到本機）
+- label: `用 repo 版`
+- description: `以 claude/agents/ 的版本覆蓋本機`
+- preview:
+  ```
+  動作：覆蓋本機
+
+  claude/agents/<path>.md  →  ~/.claude/agents/<path>.md
+
+  repo    ✅（保留）
+  本機    ⚠️ → ✅（更新）
+  ```
+- 動作：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`
+
+#### 2. 用本機版（同步到 repo）
+- label: `用本機版`
+- description: `以本機版本覆蓋 repo`
+- preview:
+  ```
+  動作：覆蓋 repo
+
+  ~/.claude/agents/<path>.md  →  claude/agents/<path>.md
+
+  repo    ⚠️ → ✅（更新）
+  本機    ✅（保留）
+  ```
+- 動作：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
+
+#### 3. 略過
+- label: `略過`
+- description: `保持現狀，不覆蓋任何一方`
+- preview:
+  ```
+  動作：不處理
+
+  repo    ⚠️（保留原版）
+  本機    ⚠️（保留原版）
+  ```
+
+- 操作回饋：
+  - 複製中：`⏳ 複製 <path>...`
+  - 成功：`✅ <動作> <path>`
+  - 失敗：`❌ 失敗：<path>（<錯誤訊息>）`
+
+---
+
+## 步驟 7：Commit & Push
+
+若有任何 repo 變更（設定檔、skills-lock.json 或 claude/agents/），使用 AskUserQuestion 詢問：
 
 - **question**: `repo 有變更，如何處理？`
 - **header**: `Commit & Push`
@@ -408,10 +678,13 @@
   變更檔案：
   ├ claude/CLAUDE.md        （已更新）
   ├ claude/settings.json    （已更新）
+  ├ claude/agents/          （已更新）
   └ skills-lock.json        （已更新）
 
   然後 git push → origin/main
   ```
+  若只有 agents 變更，commit 訊息改為：
+  `sync: 從 <hostname> 同步 agents <YYMMDDHHmm>`
   若只有 skills 變更，commit 訊息改為：
   `sync: 從 <hostname> 同步 skills <YYMMDDHHmm>`
 - 成功後顯示 `✅ 已 push 到 remote`
@@ -432,7 +705,7 @@
 
 ---
 
-## 步驟 7：完成摘要
+## 步驟 8：完成摘要
 
 顯示最終同步結果摘要，格式示例：
 ```
@@ -442,6 +715,7 @@
   CLAUDE.md     — 已更新 repo（claude/） / 已更新本機（~/.claude/） / 無差異
   settings.json — 已更新 repo（claude/） / 已更新本機（~/.claude/） / 無差異
   Skills        — 已安裝 2 個 / 已更新 skills-lock.json / 無差異
+  Agents        — 已複製 3 個到本機 / 已加入 repo 1 個 / 無差異
 ```
 
 ---
@@ -452,3 +726,5 @@
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
 - **json 比對**：忽略 `model`、`effortLevel`、`statusLine` 欄位（裝置特定設定），比較其他所有鍵值
 - **Skills 來源**：從 `skills-lock.json` 中取得 `<source>`，格式為 `<owner>/<name>` 或完整 URL
+- **Agents 路徑**：使用相對於 `claude/agents/` 或 `~/.claude/agents/` 的相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）進行比對
+- **Agents 目錄建立**：複製單一 agent 檔案前，若目標目錄不存在，自動建立（`mkdir -p`）
