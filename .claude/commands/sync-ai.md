@@ -152,7 +152,7 @@
 
 #### CLAUDE.md 衝突分析
 - 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
-- 將相鄰差異行（間距 ≤ 3 行）合併為同一個 hunk，列出所有 hunk（包含上下文）：
+- 將相鄰差異行（間距 ≤ 1 行）合併為同一個 hunk，列出所有 hunk（包含上下文）：
   ```
   📌 CLAUDE.md 差異（共 2 個區塊）：
 
@@ -198,6 +198,8 @@
 
 **選項順序固定**：repo 版永遠排第一，本機版排第二，不隨建議變動。若某版本為建議，在其 label 加上 `（建議）`。
 
+**建議標記規則**：預設標記 repo 版為建議（repo 是 source of truth）。
+
 ##### 選項 A：用 repo 版
 - label: `用 repo 版` 或 `用 repo 版（建議）`
 - description: `claude/CLAUDE.md 的內容`
@@ -236,6 +238,8 @@
 
 **選項順序固定**：repo 值永遠排第一，本機值排第二，不隨建議變動。若某值為建議，在其 label 加上 `（建議）`。
 
+**建議標記規則**：預設標記 repo 值為建議（repo 是 source of truth）。
+
 ###### 選項 A：用 repo 值
 - label: `用 repo 值` 或 `用 repo 值（建議）`
 - description: `claude/settings.json 的值`
@@ -261,7 +265,7 @@
   ```
 
 - 只有 repo 有的 key：自動保留 repo 值（不詢問）
-- 只有本機有的 key：自動加入合併結果（不詢問）
+- 只有本機有的 key：自動加入合併結果（不詢問），並在最後摘要中列出「本機新增欄位：<key>」供使用者確認
 
 ##### 陣列欄位（array）
 
@@ -341,9 +345,9 @@
 
   合併結果（CLAUDE.md）：
   ─── 摘要 ───
-  第 5 行：## 語言規範（選本機版）
-  第 8 行：**一律使用繁體中文**撰寫所有內容（選 repo 版）
-  第 15 行：`npm run build` / `yarn build` / `pnpm build`（選 repo 版）
+  區塊 1：## 語言規範（選本機版）
+  區塊 2：**一律使用繁體中文**撰寫所有內容（選 repo 版）
+  區塊 3：`npm run build` / `yarn build` / `pnpm build`（選 repo 版）
 
   合併結果（settings.json）：
   {
@@ -503,7 +507,7 @@
   - 安裝中：`⏳ 安裝 <skill-name>...`
   - 刪除中：`⏳ 刪除 <skill-name>...`
   - 成功：`✅ <動作> <skill-name>`
-  - 失敗：`❌ 失敗：<skill-name>（<錯誤訊息>）`
+  - 失敗：`❌ 失敗：<skill-name>（<錯誤訊息>）`，顯示後繼續處理下一個 skill（不中止整個流程）
 
 ---
 
@@ -610,7 +614,7 @@
   ```
 - 動作：
   - package 單位：`rm -rf ~/.claude/agents/<package-name>/`
-  - 單一檔案：`rm ~/.claude/agents/<path>.md`
+  - 單一檔案：`rm ~/.claude/agents/<path>.md`；刪除後若 package 目錄已空，自動 `rm -rf ~/.claude/agents/<package-name>/`
 
 #### 3. 略過
 - label: `略過`
@@ -686,7 +690,7 @@
 
 ## 步驟 7：Commit & Push
 
-若有任何 repo 變更（設定檔、skills-lock.json 或 claude/agents/），使用 AskUserQuestion 詢問：
+若步驟 4-6 中有任何實際寫入 repo 的操作（`claude/CLAUDE.md`、`claude/settings.json`、`skills-lock.json`、`claude/agents/` 有檔案新增/修改/刪除），使用 AskUserQuestion 詢問：
 
 - **question**: `repo 有變更，如何處理？`
 - **header**: `Commit & Push`
@@ -710,10 +714,14 @@
 
   然後 git push → origin/main
   ```
-  若只有 agents 變更，commit 訊息改為：
-  `sync: 從 <hostname> 同步 agents <YYMMDDHHmm>`
-  若只有 skills 變更，commit 訊息改為：
-  `sync: 從 <hostname> 同步 skills <YYMMDDHHmm>`
+  commit 訊息依變更組合決定：
+  - 設定檔（CLAUDE.md 或 settings.json）有變更 → `sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`
+  - 僅 skills-lock.json 變更 → `sync: 從 <hostname> 同步 skills <YYMMDDHHmm>`
+  - 僅 claude/agents/ 變更 → `sync: 從 <hostname> 同步 agents <YYMMDDHHmm>`
+  - 設定 + skills（無 agents）→ `sync: 從 <hostname> 同步設定與 skills <YYMMDDHHmm>`
+  - 設定 + agents（無 skills）→ `sync: 從 <hostname> 同步設定與 agents <YYMMDDHHmm>`
+  - skills + agents（無設定）→ `sync: 從 <hostname> 同步 skills 與 agents <YYMMDDHHmm>`
+  - 三者皆有 → `sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`
 - 成功後顯示 `✅ 已 push 到 remote`
 - 失敗則顯示 `❌ Push 失敗：<錯誤訊息>，請手動處理`
 
