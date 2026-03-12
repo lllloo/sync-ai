@@ -1,4 +1,24 @@
 {
+  "autoUpdatesChannel": "latest",
+  "enabledPlugins": {},
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "repo": "wshobson/agents",
+        "source": "github"
+      }
+    },
+    "everything-claude-code": {
+      "source": {
+        "repo": "affaan-m/everything-claude-code",
+        "source": "github"
+      }
+    }
+  },
+  "language": "繁體中文",
   "permissions": {
     "allow": [
       "Bash(~/.claude/CLAUDE.md:*)",
@@ -34,25 +54,5 @@
       "WebSearch"
     ]
   },
-  "enabledPlugins": {},
-  "extraKnownMarketplaces": {
-    "claude-code-workflows": {
-      "source": {
-        "source": "github",
-        "repo": "wshobson/agents"
-      }
-    },
-    "everything-claude-code": {
-      "source": {
-        "source": "github",
-        "repo": "affaan-m/everything-claude-code"
-      }
-    }
-  },
-  "language": "繁體中文",
-  "autoUpdatesChannel": "latest",
-  "spinnerTipsEnabled": false,
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  }
+  "spinnerTipsEnabled": false
 }

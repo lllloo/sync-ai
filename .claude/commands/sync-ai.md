@@ -100,7 +100,7 @@ node .claude/commands/sync-ai-diff.js
 
 - **question**: `"<檔名>" 有差異，如何處理？`
 - **header**: `<檔名>`
-- 選項：
+- 選項：**以下 4 個選項缺一不可，必須全部傳入 AskUserQuestion 的 options 陣列**
 
 #### 1. 用 repo 版（建議）
 - label: `用 repo 版`
@@ -112,7 +112,7 @@ node .claude/commands/sync-ai-diff.js
 - description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
 - 動作：直接以本機版內容作為合併結果，跳至 4.2
 
-#### 3. 用 VS Code 手動合併
+#### 3. 用 VS Code 手動合併（⚠️ 此選項容易被遺漏，務必包含）
 - label: `用 VS Code 手動合併`
 - description: `開啟 VS Code 直接編輯 repo 檔案，儲存並關閉 tab 後繼續`
 - 動作（CLAUDE.md）：
