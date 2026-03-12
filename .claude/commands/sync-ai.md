@@ -116,18 +116,11 @@ node .claude/commands/sync-ai-diff.js
 - label: `用 VS Code 手動合併`
 - description: `開啟 VS Code 直接編輯 repo 檔案，儲存並關閉 tab 後繼續`
 - 動作（CLAUDE.md）：
-  1. 將 `claude/CLAUDE.md` 以 git 衝突標記格式改寫（只在有差異的區段加上標記）：
-     ```
-     <<<<<<< repo (claude/CLAUDE.md)
-     <repo 版本行>
-     =======
-     <本機版本行>
-     >>>>>>> local (~/.claude/CLAUDE.md)
-     ```
+  1. 執行 `node .claude/commands/sync-ai-apply.js --action conflict-markers --file claude-md` 產生衝突標記並寫入 `claude/CLAUDE.md`
   2. 執行 `code --wait "claude/CLAUDE.md"`，阻塞等待用戶在 VS Code 中解決衝突並關閉 tab
   3. 讀取 `claude/CLAUDE.md` 內容作為合併結果
 - 動作（settings.json）：
-  1. 將 `claude/settings.json` 以 git 衝突標記格式改寫（移除裝置特定欄位後，只在有差異的區段加上標記）
+  1. 執行 `node .claude/commands/sync-ai-apply.js --action conflict-markers` 產生衝突標記並寫入 `claude/settings.json`（自動移除裝置特定欄位）
   2. 執行 `code --wait "claude/settings.json"`，阻塞等待用戶解決衝突並關閉 tab
   3. 讀取 `claude/settings.json` 內容作為合併結果
 
@@ -145,8 +138,7 @@ node .claude/commands/sync-ai-diff.js
 
 ### 4.3 確認並覆蓋本機
 
-**先判斷是否需要覆蓋**：比對合併結果與本機現有內容是否相同。
-- 若合併結果 === 本機內容：顯示 `ℹ️ 本機設定已是最新，無需覆蓋` 並直接跳至步驟 5
+**先判斷是否需要覆蓋**：執行 `node .claude/commands/sync-ai-apply.js --action check-same`（settings.json）或 `--file claude-md`（CLAUDE.md），若回傳 `{ "same": true }` 則顯示 `ℹ️ 本機設定已是最新，無需覆蓋` 並直接跳至步驟 5
 
 若合併結果 ≠ 本機內容，使用 AskUserQuestion 詢問：
 
@@ -158,8 +150,8 @@ node .claude/commands/sync-ai-diff.js
 - label: `確認覆蓋（建議）`
 - description: `將 repo 的合併結果複製到 ~/.claude/（裝置特定欄位保持本機值不變）`
 - 動作：
-  1. 複製 `claude/CLAUDE.md` 到 `~/.claude/CLAUDE.md`
-  2. 讀取 `claude/settings.json` 合併結果，再從本機 `~/.claude/settings.json` 取出 `model`、`effortLevel`、`statusLine` 的現有值，注入回合併結果後，寫入 `~/.claude/settings.json`（確保裝置特定欄位不遺失）
+  1. 執行 `node .claude/commands/sync-ai-apply.js --action write-local --file claude-md` 將 `claude/CLAUDE.md` 複製到 `~/.claude/CLAUDE.md`
+  2. 執行 `node .claude/commands/sync-ai-apply.js --action write-local` 將 `claude/settings.json` 注入裝置特定欄位後寫入 `~/.claude/settings.json`
 - 完成後顯示 `✅ 已覆蓋本機設定檔`
 
 #### 2. 跳過
@@ -353,6 +345,10 @@ node .claude/commands/sync-ai-diff.js
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
 - **比對腳本**：`.claude/commands/sync-ai-diff.js` 負責所有比對邏輯（LCS diff、JSON deep compare、skills 解析、agents 掃描與群組化）
+- **套用腳本**：`.claude/commands/sync-ai-apply.js` 負責寫入操作，以 `--action` 指定動作，`--file` 指定檔案（預設 `settings-json`，可用 `claude-md`）：
+  - `conflict-markers`：產生衝突標記並寫入 repo 檔（settings.json 自動移除裝置特定欄位）
+  - `check-same`：比對 repo 與本機內容是否相同，回傳 `{ "same": bool }`
+  - `write-local`：將 repo 合併結果寫入本機（settings.json 自動注入裝置特定欄位）
 - **skills-lock.json 格式**：
   ```json
   {
