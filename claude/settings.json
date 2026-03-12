@@ -29,6 +29,7 @@
       "Bash(ls:*)",
       "Bash(mkdir:*)",
       "Bash(npx skills:*)",
+      "Bash(node .claude/*)",
       "WebFetch(*)",
       "WebSearch"
     ]
