@@ -15,28 +15,27 @@
 
 ## 步驟 2：比對階段
 
-### 設定檔比對
+執行比對腳本，讀取 JSON 輸出作為後續所有步驟的資料來源：
 
-- **CLAUDE.md**：比對 `~/.claude/CLAUDE.md` 與 `claude/CLAUDE.md` 的完整內容
-- **settings.json**：載入兩邊 JSON，移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）後比較
+```bash
+node .claude/commands/sync-ai-diff.js
+```
 
-### Skills 比對
+腳本輸出 JSON 結構：
+```json
+{
+  "claudeMd":    { "same": bool, "diff": "...", "repoContent": "...", "localContent": "..." },
+  "settingsJson": { "same": bool, "diff": "...", "deviceKeys": { "model": null, "statusLine": {...} } },
+  "skills":      { "same": bool, "lockOnly": [], "localOnly": [], "lockData": {...} },
+  "agents":      { "same": bool, "repoOnly": [], "localOnly": [], "conflicts": [], "groups": [...] }
+}
+```
 
-1. 讀取 `skills-lock.json`；若檔案不存在，視為空清單（`{ "version": 1, "skills": {} }`）繼續執行
-2. 執行 `npx skills list -g --agent claude-code` 取得**全域** skills（`~/.agents/skills/`）
-3. 比對差異，分類為：
-   - lock 有、全域缺少的 skills（新機器需補裝）
-   - 全域有、lock 缺少的 skills（本機新增，可更新 lock 或忽略）
-
-### Agents 比對
-
-1. 遞迴掃描 `claude/agents/` 所有 `.md` 檔案，記錄相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）
-2. 遞迴掃描 `~/.claude/agents/` 所有 `.md` 檔案，記錄相對路徑；**若目錄不存在，視為空清單（本機無任何 agent），跳過掃描**
-3. 比對差異，分類為：
-   - repo 有、本機缺少（需複製到本機）
-   - 本機有、repo 缺少（本機新增，可加入 repo 或刪除）
-   - 兩邊都有但內容不同（衝突）
-4. **群組化**：某 package 下所有差異同屬一種類型（全部「repo 有本機無」或全部「本機有 repo 無」）且無任何衝突時，以整個 package 為單位詢問一次；否則逐檔詢問。
+各欄位說明：
+- `claudeMd.diff`：含 context 的 unified diff 文字（`  ` context、`- ` repo only、`+ ` local only）
+- `settingsJson.deviceKeys`：本機的裝置特定欄位值（`model`、`effortLevel`、`statusLine`），覆蓋本機時需注入回去
+- `skills.lockOnly`：在 lock 但未安裝的 skill names；`localOnly`：已安裝但不在 lock 的 skill names
+- `agents.groups`：群組化結果，`level` 為 `"package"` 或 `"file"`，`type` 為 `"repoOnly"`、`"localOnly"` 或 `"conflict"`
 
 ---
 
@@ -353,19 +352,7 @@
 
 - **Hostname 取得**：使用 `hostname` 指令取得裝置名稱（Windows 上 `hostname`，macOS/Linux 上 `uname -n`，或透過環境變數 `$HOSTNAME`）
 - **時間戳記格式**：YYMMDDHHmm（例 2603061430）
-- **json 比對**：用 `Read` 工具讀取兩個 JSON 檔，在 context 中 parse 後逐欄位比對（deep comparison）：
-  1. 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
-  2. 逐 key 遞迴比較所有欄位值
-  3. **key 順序差異不視為差異**（只比較值）
-  4. 陣列欄位：以項目集合比較（找出只在一邊的項目），順序不同不視為差異
-  5. `null`、`{}`、`[]` 視為不同的值，不自動轉換
-- **`npx skills list -g` 輸出格式**（純文字，無 JSON 選項）：
-  ```
-  <群組名稱>（粗體）
-    <skill-name>  ~/.agents/skills/<skill-name>
-      Agents: Claude Code   （或 "not linked"）
-  ```
-  輸出**不包含 source 資訊**。加入 lock 時，`source` 填入 `"TODO: <owner>/<repo>"` 佔位，並提示用戶事後手動補充
+- **比對腳本**：`.claude/commands/sync-ai-diff.js` 負責所有比對邏輯（LCS diff、JSON deep compare、skills 解析、agents 掃描與群組化）
 - **skills-lock.json 格式**：
   ```json
   {
@@ -379,5 +366,5 @@
     }
   }
   ```
-  `computedHash` 留空字串（無法自動計算，不影響安裝）
-- **Agents**：使用相對路徑比對（如 `awesome-claude-code-subagents/backend-developer.md`）；複製前若目標目錄不存在自動 `mkdir -p`
+  加入 lock 時，`source` 填入 `"TODO: <owner>/<repo>"` 佔位，並提示用戶事後手動補充。`computedHash` 留空字串（無法自動計算，不影響安裝）
+- **Agents 路徑**：使用相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）；複製前若目標目錄不存在自動 `mkdir -p`
