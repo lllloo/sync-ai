@@ -34,7 +34,6 @@
       "WebSearch"
     ]
   },
-  "availableModels": ["sonnet", "haiku"],
   "enabledPlugins": {},
   "extraKnownMarketplaces": {
     "claude-code-workflows": {
