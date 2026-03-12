@@ -93,16 +93,31 @@
 
 ## 步驟 4：執行 — 設定檔同步
 
-若 CLAUDE.md 有差異或 settings.json 有差異，進行以下操作（無差異的檔案跳過）：
+若 CLAUDE.md 有差異或 settings.json 有差異，對每個有差異的檔案逐一處理（無差異的檔案跳過）。
 
-### 4.1 用 vim 手動合併
+### 4.1 詢問合併方式
 
-#### CLAUDE.md
+對每個有差異的檔案，先顯示 diff，再使用 AskUserQuestion 詢問合併方式：
 
-1. 建立暫存檔（Windows: `$TEMP/claude-merge-CLAUDE.md`，macOS/Linux: `/tmp/claude-merge-CLAUDE.md`）
-2. 將兩版本合併寫入暫存檔：
-   - 無差異行直接寫入
-   - 差異 hunk 以標準 git 衝突標記格式寫入：
+- **question**: `"<檔名>" 有差異，如何處理？`
+- **header**: `<檔名>`
+- 選項：
+
+#### 1. 用 repo 版（建議）
+- label: `用 repo 版`
+- description: `repo ✅ 本機 ⚠️ → ✅　以 claude/ 的版本覆蓋本機`
+- 動作：直接以 repo 版內容作為合併結果，跳至 4.2
+
+#### 2. 用本機版
+- label: `用本機版`
+- description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
+- 動作：直接以本機版內容作為合併結果，跳至 4.2
+
+#### 3. 用 VS Code 手動合併
+- label: `用 VS Code 手動合併`
+- description: `開啟 VS Code 直接編輯 repo 檔案，儲存並關閉 tab 後繼續`
+- 動作（CLAUDE.md）：
+  1. 將 `claude/CLAUDE.md` 以 git 衝突標記格式改寫（只在有差異的區段加上標記）：
      ```
      <<<<<<< repo (claude/CLAUDE.md)
      <repo 版本行>
@@ -110,22 +125,21 @@
      <本機版本行>
      >>>>>>> local (~/.claude/CLAUDE.md)
      ```
-3. 執行 `vim <暫存檔路徑>`，同步阻塞等待用戶編輯完成存檔離開
-4. 讀取暫存檔內容作為合併結果
-5. 刪除暫存檔
+  2. 執行 `code --wait "claude/CLAUDE.md"`，阻塞等待用戶在 VS Code 中解決衝突並關閉 tab
+  3. 讀取 `claude/CLAUDE.md` 內容作為合併結果
+- 動作（settings.json）：
+  1. 將 `claude/settings.json` 以 git 衝突標記格式改寫（移除裝置特定欄位後，只在有差異的區段加上標記）
+  2. 執行 `code --wait "claude/settings.json"`，阻塞等待用戶解決衝突並關閉 tab
+  3. 讀取 `claude/settings.json` 內容作為合併結果
 
-#### settings.json
-
-1. 建立兩個暫存檔（移除裝置特定欄位後）：
-   - `$TEMP/settings-repo.json`：repo 版（`claude/settings.json`）
-   - `$TEMP/settings-local.json`：本機版（`~/.claude/settings.json`）
-2. 執行 `vim -d $TEMP/settings-repo.json $TEMP/settings-local.json`（vimdiff 兩欄對比），同步阻塞等待用戶編輯完成離開
-3. 讀取 `$TEMP/settings-repo.json`（左欄）作為合併結果
-4. 刪除兩個暫存檔
+#### 4. 略過
+- label: `略過`
+- description: `保持現狀，跳過此檔案`
+- 動作：跳過此檔案，不寫入 repo 或本機
 
 ### 4.2 寫入合併結果到 repo
 
-- 將 vim 編輯後的合併結果寫入：
+- 將合併結果寫入：
   - `claude/CLAUDE.md`
   - `claude/settings.json`（**裝置特定欄位 `model`、`effortLevel`、`statusLine` 不寫入 repo**）
 - 完成後顯示 `✅ 設定已合併至 repo`

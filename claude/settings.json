@@ -5,6 +5,7 @@
       "Bash(cd:*)",
       "Bash(cp:*)",
       "Bash(du:*)",
+      "Bash(code --wait *)",
       "Bash(cat:*)",
       "Bash(date:*)",
       "Bash(grep:*)",
