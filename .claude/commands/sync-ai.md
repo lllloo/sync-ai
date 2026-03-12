@@ -4,57 +4,21 @@
 
 執行 `git fetch` 取得 remote 最新資訊。
 
-**若 `git fetch` 失敗**（無網路、remote 不可達）：顯示警告 `⚠️ git fetch 失敗：<錯誤訊息>`，並使用 AskUserQuestion 詢問是否繼續：
-- 選項 1：`繼續（用現有 repo 狀態）` — 跳過 fetch，繼續執行後續比對
-- 選項 2：`中止` — 停止執行
+**若 `git fetch` 失敗**（無網路、remote 不可達）：顯示 `⚠️ git fetch 失敗：<錯誤訊息>`，繼續用現有 repo 狀態執行。
 
-若 remote 有新 commit，使用 AskUserQuestion 詢問：
+若 remote 有新 commit，直接執行 `git pull --ff-only`，依結果處理：
 
-- **question**: `Remote 有 <N> 個新 commit，是否同步？`
-- **header**: `Git Pull`
-- 選項：
-
-#### 1. Pull 並更新（建議）
-- label: `Pull 並更新（建議）`
-- description: `執行 git pull --ff-only，取得 remote 最新設定後繼續`
-- preview:
-  ```
-  動作：git pull --ff-only
-
-  remote 有新 commit（fast-forward 可合併）
-  ├ 設定檔可能更新
-  └ 繼續執行後續比對
-  ```
-- 動作：執行 `git pull --ff-only`
-- 若 pull 失敗，依錯誤訊息分類處理：
-  - 若包含 `not possible to fast-forward`（本機有超前 commit）：顯示 `⚠️ Pull 失敗：本機有未 push 的 commit，無法 fast-forward。請手動解決後重新執行，或選擇「繼續用本機版本」繼續比對`，並提供選項：
-    - `繼續用本機版本` — 以現有 repo 狀態繼續（等同「略過」）
-    - `中止` — 停止執行
-  - 若包含 `Authentication failed` 或 `Permission denied`（認證失敗）：顯示 `⚠️ Pull 失敗：認證失敗，請檢查 SSH key 或 Git token 設定`，並提供選項：
-    - `繼續用本機版本` — 跳過 pull，以現有 repo 狀態繼續
-    - `中止` — 停止執行
-  - 其他失敗：顯示 `❌ Pull 失敗：<錯誤訊息>` 並停止執行
-
-#### 2. 略過
-- label: `略過，繼續用本機版本`
-- description: `不拉取，以本機現有 repo 狀態繼續比對`
-- preview:
-  ```
-  動作：不執行 pull
-
-  remote 的新 commit 不會套用
-  └ 繼續用本機現有 repo 內容比對
-  ```
+- **成功**：顯示 `✅ 已 pull 最新 commit`，繼續執行
+- **失敗**：顯示 `⚠️ Pull 失敗：<錯誤訊息>`，繼續用本機狀態執行
 
 ---
 
-## 步驟 2：比對階段（Dry-run 預覽）
+## 步驟 2：比對階段
 
 ### 設定檔比對
 
 - **CLAUDE.md**：比對 `~/.claude/CLAUDE.md` 與 `claude/CLAUDE.md` 的完整內容
 - **settings.json**：載入兩邊 JSON，移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）後比較
-  - 若有差異，將兩邊 JSON 內容（忽略指定欄位）轉成 diff 格式供後續顯示
 
 ### Skills 比對
 
@@ -72,14 +36,11 @@
    - repo 有、本機缺少（需複製到本機）
    - 本機有、repo 缺少（本機新增，可加入 repo 或刪除）
    - 兩邊都有但內容不同（衝突）
-4. **群組化**：符合以下**所有條件**時，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案：
-   - 該 package 下的所有差異檔案**同屬一種類型**（全部「repo 有本機無」，或全部「本機有 repo 無」）
-   - 該 package 內**沒有任何「兩邊都有但內容不同」的衝突檔案**
-   - 只要有一個衝突（內容不同），整個 package 改為逐檔詢問
+4. **群組化**：某 package 下所有差異同屬一種類型（全部「repo 有本機無」或全部「本機有 repo 無」）且無任何衝突時，以整個 package 為單位詢問一次；否則逐檔詢問。
 
 ---
 
-## 步驟 3：顯示摘要（Dry-run 預覽）
+## 步驟 3：顯示摘要
 
 先顯示整體同步狀態摘要：
 ```
@@ -101,264 +62,75 @@
 + "autoSave": true,
 ```
 
-**注意**：diff 方向為 `-` 表示 repo（`claude/`）、`+` 表示本機（`~/.claude/`）
-
 ### 若 Skills 有差異，顯示清單
 
-格式示例：
+格式示例（只列有差異的項目）：
 ```
 📋 Skills 同步詳情：
   skill                        lock    本機(~/.agents)
   ────────────────────────────────────────────────────
-  frontend-design              ✅      ✅
   typescript-types             ✅      ❌ 缺少
   my-local-skill               ❌ 缺少  ✅
 ```
 
 ### 若 Agents 有差異，顯示清單
 
-格式示例：
+格式示例（只列有差異的項目）：
 ```
 📋 Agents 同步詳情：
   agent                                              repo    本機(~/.claude/agents)
   ────────────────────────────────────────────────────────────────────────────────
-  awesome-claude-code-subagents/backend-developer    ✅      ✅
   awesome-claude-code-subagents/docker-expert        ✅      ❌ 缺少
-  everything-claude-code/architect                   ✅      ✅
   my-custom-package/my-agent                         ❌ 缺少  ✅
   everything-claude-code/code-reviewer               ⚠️ 衝突  ⚠️ 衝突
 ```
 
 ### 若全部一致
 
-直接顯示：
-```
-✅ 同步完成（無差異）
-```
-
-然後**直接結束執行**，不執行步驟 4-8，不再詢問任何操作。
+直接顯示 `✅ 同步完成（無差異）` 並結束執行，不執行步驟 4-8。
 
 ---
 
-## 步驟 4：執行 — 設定檔同步（Smart Merge）
+## 步驟 4：執行 — 設定檔同步
 
-若有設定檔差異（CLAUDE.md 或 settings.json），進行以下操作：
+若 CLAUDE.md 有差異或 settings.json 有差異，進行以下操作（無差異的檔案跳過）：
 
-### 4.1 偵測並分析衝突
+### 4.1 用 vim 手動合併
 
-**條件判斷**：
-- 若 CLAUDE.md 無差異 → 跳過 CLAUDE.md 衝突分析與詢問
-- 若 settings.json 無差異 → 跳過 settings.json 衝突分析與詢問
+#### CLAUDE.md
 
-#### CLAUDE.md 衝突分析
-- 逐行比對 repo `claude/CLAUDE.md` 與本機 `~/.claude/CLAUDE.md`
-- 將相鄰差異行（間距 ≤ 1 行）合併為同一個 hunk，列出所有 hunk（包含上下文）：
-  ```
-  📌 CLAUDE.md 差異（共 2 個區塊）：
+1. 建立暫存檔（Windows: `$TEMP/claude-merge-CLAUDE.md`，macOS/Linux: `/tmp/claude-merge-CLAUDE.md`）
+2. 將兩版本合併寫入暫存檔：
+   - 無差異行直接寫入
+   - 差異 hunk 以標準 git 衝突標記格式寫入：
+     ```
+     <<<<<<< repo (claude/CLAUDE.md)
+     <repo 版本行>
+     =======
+     <本機版本行>
+     >>>>>>> local (~/.claude/CLAUDE.md)
+     ```
+3. 執行 `vim <暫存檔路徑>`，同步阻塞等待用戶編輯完成存檔離開
+4. 讀取暫存檔內容作為合併結果
+5. 刪除暫存檔
 
-  區塊 1（第 5-5 行）：
-    4  此檔案定義所有專案通用的全域規則與慣例。
-  - 5  ## 語言規範（claude/CLAUDE.md）
-  + 5  ## Language Rules（~/.claude/CLAUDE.md）
-    6  （空行）
+#### settings.json
 
-  區塊 2（第 13-15 行）：
-    12  （空行）
-  - 13  - `npm run build` / `yarn build` / `pnpm build`
-  - 14  - `npm run docs:build` 或其他類似構建命令
-  + 13  - `npm build` / `yarn build`
-    15  （空行）
-  ```
+1. 建立兩個暫存檔（移除裝置特定欄位後）：
+   - `$TEMP/settings-repo.json`：repo 版（`claude/settings.json`）
+   - `$TEMP/settings-local.json`：本機版（`~/.claude/settings.json`）
+2. 執行 `vim -d $TEMP/settings-repo.json $TEMP/settings-local.json`（vimdiff 兩欄對比），同步阻塞等待用戶編輯完成離開
+3. 讀取 `$TEMP/settings-repo.json`（左欄）作為合併結果
+4. 刪除兩個暫存檔
 
-#### settings.json 衝突分析
-- 載入 repo `claude/settings.json` 和本機 `~/.claude/settings.json` JSON
-- 移除裝置特定欄位（`model`、`effortLevel`、`statusLine`）
-- 對每個差異欄位，根據值的型別進行分析：
-  - **純量值**（string、number、boolean、object）：整個值視為一個差異
-  - **陣列值**（array）：逐項比較，列出各個差異項目
-- 列出所有差異（含陣列內差異項目）：
-  ```
-  📌 settings.json 差異（已排除 model、effortLevel、statusLine）：
-    • autoSave：claude/ 為 false | ~/.claude/ 為 true
-    • permissions.allow（陣列）：
-      - "Bash(find*)"    只在 repo
-      + "Bash(tr:*)"     只在本機
-      + "Bash(wc:*)"     只在本機
-  ```
+### 4.2 寫入合併結果到 repo
 
-### 4.2 逐項詢問衝突
+- 將 vim 編輯後的合併結果寫入：
+  - `claude/CLAUDE.md`
+  - `claude/settings.json`（**裝置特定欄位 `model`、`effortLevel`、`statusLine` 不寫入 repo**）
+- 完成後顯示 `✅ 設定已合併至 repo`
 
-#### CLAUDE.md 衝突解決
-
-對每個 hunk 詢問一次（使用 AskUserQuestion，multiSelect false）：
-
-- **question**: `第 <start>-<end> 行（區塊 <N>/<total>）衝突，保留哪個版本？`
-- **header**: `區塊 <N>`
-- 選項：
-
-**選項順序固定**：repo 版永遠排第一，本機版排第二，不隨建議變動。若某版本為建議，在其 label 加上 `（建議）`。
-
-**建議標記規則**：預設標記 repo 版為建議（repo 是 source of truth）。
-
-##### 選項 A：用 repo 版
-- label: `用 repo 版` 或 `用 repo 版（建議）`
-- description: `claude/CLAUDE.md 的內容`
-- preview:
-  ```
-  （顯示 hunk 前 2 行 context）
-  - <repo 版差異行...>    ← 保留此區塊
-  （顯示 hunk 後 2 行 context）
-  ```
-
-##### 選項 B：用本機版
-- label: `用本機版` 或 `用本機版（建議）`
-- description: `~/.claude/CLAUDE.md 的內容`
-- preview:
-  ```
-  （顯示 hunk 前 2 行 context）
-  + <本機版差異行...>    ← 保留此區塊
-  （顯示 hunk 後 2 行 context）
-  ```
-
-- 詢問順序：按 hunk 起始行號遞增
-- hunk 內所有行一起替換，不拆分逐行詢問
-- 無差異行：自動保留（不詢問）
-
-#### settings.json 衝突解決
-
-根據欄位型別採用不同策略：
-
-##### 純量欄位（string、number、boolean、object）
-
-對每個差異欄位詢問一次（使用 AskUserQuestion，multiSelect false）：
-
-- **question**: `"<key>" 欄位衝突，保留哪個值？`
-- **header**: `<key>`
-- 選項：
-
-**選項順序固定**：repo 值永遠排第一，本機值排第二，不隨建議變動。若某值為建議，在其 label 加上 `（建議）`。
-
-**建議標記規則**：預設標記 repo 值為建議（repo 是 source of truth）。
-
-###### 選項 A：用 repo 值
-- label: `用 repo 值` 或 `用 repo 值（建議）`
-- description: `claude/settings.json 的值`
-- preview:
-  ```
-  {
-    ...
-    "<key>": <repo_value>     ← 保留此值（repo）
-    ...
-  }
-  ```
-
-###### 選項 B：用本機值
-- label: `用本機值` 或 `用本機值（建議）`
-- description: `~/.claude/settings.json 的值`
-- preview:
-  ```
-  {
-    ...
-    "<key>": <local_value>    ← 保留此值（本機）
-    ...
-  }
-  ```
-
-- 只有 repo 有的 key：自動保留 repo 值（不詢問）
-- 只有本機有的 key：自動加入合併結果（不詢問），並在最後摘要中列出「本機新增欄位：<key>」供使用者確認
-
-##### 陣列欄位（array）
-
-對陣列中每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）：
-
-**只在 repo 的項目**
-
-- **question**: `"<item>" 只在 repo 的 <key> 中，如何處理？`
-- **header**: `<key>`
-- 選項：
-
-###### 選項 A：保留（建議）
-- label: `保留（建議）`
-- description: `納入合併結果，repo 與本機皆保有此項目`
-- preview:
-  ```
-  "<key>": [
-    ...
-    "<item>"    ← 保留（repo 有，本機將同步）
-    ...
-  ]
-  ```
-
-###### 選項 B：移除
-- label: `移除`
-- description: `從合併結果移除，repo 與本機皆刪除此項目`
-- preview:
-  ```
-  "<key>": [
-    ...
-    // "<item>" 已移除
-    ...
-  ]
-  ```
-
-**只在本機的項目**
-
-- **question**: `"<item>" 只在本機的 <key> 中，如何處理？`
-- **header**: `<key>`
-- 選項：
-
-###### 選項 A：保留（建議）
-- label: `保留（建議）`
-- description: `納入合併結果，repo 與本機皆保有此項目`
-- preview:
-  ```
-  "<key>": [
-    ...
-    "<item>"    ← 保留（本機有，repo 將同步）
-    ...
-  ]
-  ```
-
-###### 選項 B：移除
-- label: `移除`
-- description: `從合併結果移除，repo 與本機皆刪除此項目`
-- preview:
-  ```
-  "<key>": [
-    ...
-    // "<item>" 已移除
-    ...
-  ]
-  ```
-
-- 兩邊都有的項目：自動保留（不詢問）
-- 合併後陣列順序：先保留兩邊共有的（依 repo 順序），再附加選擇保留的新增項目
-
-### 4.3 寫入合併結果到 repo
-
-- 根據上述選擇，將合併後的內容寫入：
-  - `claude/CLAUDE.md`（按行合併）
-  - `claude/settings.json`（按欄位合併；**裝置特定欄位 `model`、`effortLevel`、`statusLine` 不寫入 repo**，只保留在本機）
-- 顯示最終合併結果供確認：
-  ```
-  ✅ 設定已合併至 repo
-
-  合併結果（CLAUDE.md）：
-  ─── 摘要 ───
-  區塊 1：## 語言規範（選本機版）
-  區塊 2：**一律使用繁體中文**撰寫所有內容（選 repo 版）
-  區塊 3：`npm run build` / `yarn build` / `pnpm build`（選 repo 版）
-
-  合併結果（settings.json）：
-  {
-    "theme": "light",     ← ~/.claude/
-    "autoSave": false,    ← claude/
-    "model": "claude-opus-4-6",  ← ~/.claude/（裝置特定，保留）
-    ...
-  }
-  ```
-
-### 4.4 確認並覆蓋本機
+### 4.3 確認並覆蓋本機
 
 **先判斷是否需要覆蓋**：比對合併結果與本機現有內容是否相同。
 - 若合併結果 === 本機內容：顯示 `ℹ️ 本機設定已是最新，無需覆蓋` 並直接跳至步驟 5
@@ -371,16 +143,7 @@
 
 #### 1. 確認覆蓋（建議）
 - label: `確認覆蓋（建議）`
-- description: `將 repo 的合併結果複製到 ~/.claude/`
-- preview:
-  ```
-  覆蓋以下檔案：
-
-  claude/CLAUDE.md（已合併）      → ~/.claude/CLAUDE.md
-  claude/settings.json（已合併）  → ~/.claude/settings.json
-
-  裝置特定欄位（model、effortLevel、statusLine）保持本機值不變
-  ```
+- description: `將 repo 的合併結果複製到 ~/.claude/（裝置特定欄位保持本機值不變）`
 - 動作：
   1. 複製 `claude/CLAUDE.md` 到 `~/.claude/CLAUDE.md`
   2. 讀取 `claude/settings.json` 合併結果，再從本機 `~/.claude/settings.json` 取出 `model`、`effortLevel`、`statusLine` 的現有值，注入回合併結果後，寫入 `~/.claude/settings.json`（確保裝置特定欄位不遺失）
@@ -388,27 +151,13 @@
 
 #### 2. 跳過
 - label: `跳過，稍後手動同步`
-- description: `不覆蓋本機，repo 已保存合併結果，可自行複製`
-- preview:
-  ```
-  本機檔案保持不變：
-
-  ~/.claude/CLAUDE.md      （未更動）
-  ~/.claude/settings.json  （未更動）
-
-  repo 的合併結果已寫入 claude/，可稍後手動複製
-  ```
+- description: `不覆蓋本機，repo 已保存合併結果，可稍後手動複製`
 
 ---
 
 ## 步驟 5：執行 — Skills 同步
 
-若 skills-lock.json 與全域有差異，**對每個有差異的 skill 逐一詢問**（使用 AskUserQuestion，multiSelect false）。
-
-先顯示差異摘要：
-```
-📋 Skills 差異（共 <N> 個），逐一處理：
-```
+若 skills-lock.json 與全域有差異，先顯示 `📋 Skills 差異（共 <N> 個），逐一處理：`，再對每個有差異的 skill 逐一詢問（使用 AskUserQuestion，multiSelect false）。
 
 ### 5.1 lock 有、本機缺少的 skill
 
@@ -418,44 +167,19 @@
 
 #### 1. 安裝到本機（同步）
 - label: `安裝到本機（同步）`
-- description: `從 lock 的 source 安裝此 skill 到 ~/.agents/`
-- preview:
-  ```
-  動作：安裝
-
-  npx skills add <source> -g -y --skill <name> --agent claude-code
-
-  安裝後：
-  lock    ✅
-  本機    ❌ → ✅
-  ```
+- description: `lock ✅ → 本機 ❌ → ✅　安裝此 skill 到 ~/.agents/`
 
 #### 2. 從 lock 移除
 - label: `從 lock 移除`
-- description: `將此 skill 從 skills-lock.json 中刪除，本機不安裝`
-- preview:
-  ```
-  動作：從 lock 移除
-
-  lock    ✅ → ❌
-  本機    ❌（不安裝）
-  ```
+- description: `lock ✅ → ❌　從 skills-lock.json 刪除，本機不安裝`
 
 #### 3. 略過
 - label: `略過`
-- description: `保持現狀，lock 保留但本機不安裝`
-- preview:
-  ```
-  動作：不處理
-
-  lock    ✅（保留）
-  本機    ❌（不安裝）
-  ```
+- description: `lock ✅ 本機 ❌　保持現狀`
 
 - 執行動作：
   - 安裝：`npx skills add <source> -g -y --skill <name> --agent claude-code`
   - 從 lock 移除：更新 `skills-lock.json`，刪除對應 key
-  - 略過：不執行任何操作
 
 ### 5.2 本機有、lock 缺少的 skill
 
@@ -465,43 +189,19 @@
 
 #### 1. 加入 lock（同步）
 - label: `加入 lock（同步）`
-- description: `將此 skill 寫入 skills-lock.json，供其他裝置同步`
-- preview:
-  ```
-  動作：加入 lock
-
-  lock    ❌ → ✅
-  本機    ✅（保留）
-  ```
+- description: `lock ❌ → ✅ 本機 ✅　寫入 skills-lock.json 供其他裝置同步`
 
 #### 2. 從本機刪除
 - label: `從本機刪除`
-- description: `從 ~/.agents/ 移除此 skill，lock 不新增`
-- preview:
-  ```
-  動作：刪除本機
-
-  npx skills remove <name> -g -y
-
-  lock    ❌（不新增）
-  本機    ✅ → ❌
-  ```
+- description: `lock ❌ 本機 ✅ → ❌　從 ~/.agents/ 移除此 skill`
 
 #### 3. 略過
 - label: `略過`
-- description: `保持現狀，本機保留但不加入 lock`
-- preview:
-  ```
-  動作：不處理
-
-  lock    ❌（不新增）
-  本機    ✅（保留）
-  ```
+- description: `lock ❌ 本機 ✅　保持現狀`
 
 - 執行動作：
-  - 加入 lock：將 skill 寫入 `skills-lock.json`，`source` 填入 `"TODO: <owner>/<repo>"`，`sourceType: "github"`，`computedHash` 留空字串；完成後顯示提示 `⚠️ 請手動補充 skills-lock.json 中 <name> 的 source 欄位（格式：<owner>/<repo>）`
+  - 加入 lock：將 skill 寫入 `skills-lock.json`，`source` 填入 `"TODO: <owner>/<repo>"`，`sourceType: "github"`，`computedHash` 留空字串；完成後顯示 `⚠️ 請手動補充 skills-lock.json 中 <name> 的 source 欄位（格式：<owner>/<repo>）`
   - 從本機刪除：`npx skills remove <name> -g -y`
-  - 略過：不執行任何操作
 
 - 操作回饋：
   - 安裝中：`⏳ 安裝 <skill-name>...`
@@ -513,14 +213,7 @@
 
 ## 步驟 6：執行 — Agents 同步
 
-若 `claude/agents/` 與 `~/.claude/agents/` 有差異，對每個差異項目逐一詢問（使用 AskUserQuestion，multiSelect false）。
-
-**群組化規則**：若某 package 目錄（如 `awesome-claude-code-subagents/`）下的**所有差異檔案**都處於完全相同的狀態（全部為「repo 有本機無」、或全部為「本機有 repo 無」），**且該 package 內無任何衝突項目**，以整個 package 為單位詢問一次；否則逐一詢問每個差異檔案。
-
-先顯示差異摘要：
-```
-📋 Agents 差異（共 <N> 項），逐一處理：
-```
+若 `claude/agents/` 與 `~/.claude/agents/` 有差異，先顯示 `📋 Agents 差異（共 <N> 項），逐一處理：`，再依步驟 2 群組化結果逐一詢問（使用 AskUserQuestion，multiSelect false）。
 
 ### 6.1 repo 有、本機缺少的 agent（或整個 package）
 
@@ -531,52 +224,19 @@
 
 #### 1. 複製到本機（同步）
 - label: `複製到本機（同步）`
-- description: `將 repo 的 agent 複製到 ~/.claude/agents/`
-- preview（package 單位）:
-  ```
-  動作：複製整個 package
-
-  claude/agents/<package-name>/  →  ~/.claude/agents/<package-name>/
-  （共 <N> 個 agent 檔案）
-
-  repo    ✅
-  本機    ❌ → ✅
-  ```
-- preview（單一檔案）:
-  ```
-  動作：複製檔案
-
-  claude/agents/<path>.md  →  ~/.claude/agents/<path>.md
-
-  repo    ✅
-  本機    ❌ → ✅
-  ```
+- description: `repo ✅ → 本機 ❌ → ✅　將 repo 的 agent 複製到 ~/.claude/agents/`
 - 動作：
   - package 單位：`cp -r claude/agents/<package-name>/ ~/.claude/agents/<package-name>/`（若 `~/.claude/agents/` 不存在先 `mkdir -p`）
   - 單一檔案：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`（確保目標目錄存在，`mkdir -p`）
 
 #### 2. 從 repo 移除
 - label: `從 repo 移除`
-- description: `將此 agent 從 claude/agents/ 中刪除，本機不新增`
-- preview:
-  ```
-  動作：從 repo 移除
-
-  repo    ✅ → ❌
-  本機    ❌（不新增）
-  ```
+- description: `repo ✅ → ❌ 本機 ❌　從 claude/agents/ 刪除，本機不新增`
 - 動作：刪除 `claude/agents/<path>` 對應檔案或目錄
 
 #### 3. 略過
 - label: `略過`
-- description: `保持現狀，repo 保留但本機不新增`
-- preview:
-  ```
-  動作：不處理
-
-  repo    ✅（保留）
-  本機    ❌（不新增）
-  ```
+- description: `repo ✅ 本機 ❌　保持現狀`
 
 ### 6.2 本機有、repo 缺少的 agent（或整個 package）
 
@@ -587,45 +247,21 @@
 
 #### 1. 加入 repo（同步）
 - label: `加入 repo（同步）`
-- description: `將本機 agent 複製到 claude/agents/，供其他裝置同步`
-- preview（package 單位）:
-  ```
-  動作：加入整個 package
-
-  ~/.claude/agents/<package-name>/  →  claude/agents/<package-name>/
-  （共 <N> 個 agent 檔案）
-
-  repo    ❌ → ✅
-  本機    ✅（保留）
-  ```
+- description: `repo ❌ → ✅ 本機 ✅　將本機 agent 複製到 claude/agents/`
 - 動作：
   - package 單位：`cp -r ~/.claude/agents/<package-name>/ claude/agents/<package-name>/`
   - 單一檔案：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
 
 #### 2. 從本機刪除
 - label: `從本機刪除`
-- description: `從 ~/.claude/agents/ 移除此 agent，repo 不新增`
-- preview:
-  ```
-  動作：刪除本機
-
-  repo    ❌（不新增）
-  本機    ✅ → ❌
-  ```
+- description: `repo ❌ 本機 ✅ → ❌　從 ~/.claude/agents/ 移除此 agent`
 - 動作：
   - package 單位：`rm -rf ~/.claude/agents/<package-name>/`
   - 單一檔案：`rm ~/.claude/agents/<path>.md`；刪除後若 package 目錄已空，自動 `rm -rf ~/.claude/agents/<package-name>/`
 
 #### 3. 略過
 - label: `略過`
-- description: `保持現狀，本機保留但不加入 repo`
-- preview:
-  ```
-  動作：不處理
-
-  repo    ❌（不新增）
-  本機    ✅（保留）
-  ```
+- description: `repo ❌ 本機 ✅　保持現狀`
 
 ### 6.3 兩邊都有但內容不同的 agent
 
@@ -644,42 +280,17 @@
 
 #### 1. 用 repo 版（同步到本機）
 - label: `用 repo 版`
-- description: `以 claude/agents/ 的版本覆蓋本機`
-- preview:
-  ```
-  動作：覆蓋本機
-
-  claude/agents/<path>.md  →  ~/.claude/agents/<path>.md
-
-  repo    ✅（保留）
-  本機    ⚠️ → ✅（更新）
-  ```
+- description: `repo ✅ 本機 ⚠️ → ✅　以 claude/agents/ 的版本覆蓋本機`
 - 動作：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`
 
 #### 2. 用本機版（同步到 repo）
 - label: `用本機版`
-- description: `以本機版本覆蓋 repo`
-- preview:
-  ```
-  動作：覆蓋 repo
-
-  ~/.claude/agents/<path>.md  →  claude/agents/<path>.md
-
-  repo    ⚠️ → ✅（更新）
-  本機    ✅（保留）
-  ```
+- description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
 - 動作：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
 
 #### 3. 略過
 - label: `略過`
-- description: `保持現狀，不覆蓋任何一方`
-- preview:
-  ```
-  動作：不處理
-
-  repo    ⚠️（保留原版）
-  本機    ⚠️（保留原版）
-  ```
+- description: `repo ⚠️ 本機 ⚠️　保持現狀`
 
 - 操作回饋：
   - 複製中：`⏳ 複製 <path>...`
@@ -699,50 +310,19 @@
 #### 1. 自動 commit 並 push（建議）
 - label: `自動 commit 並 push（建議）`
 - description: `git add → commit → push，一鍵完成`
-- preview: 根據變更內容動態產生，格式：
-  ```
-  git add claude/ skills-lock.json
-
-  commit 訊息：
-  sync: 從 <hostname> 同步設定 <YYMMDDHHmm>
-
-  變更檔案：
-  ├ claude/CLAUDE.md        （已更新）
-  ├ claude/settings.json    （已更新）
-  ├ claude/agents/          （已更新）
-  └ skills-lock.json        （已更新）
-
-  然後 git push → origin/main
-  ```
-  commit 訊息依變更組合決定：
-  - 設定檔（CLAUDE.md 或 settings.json）有變更 → `sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`
-  - 僅 skills-lock.json 變更 → `sync: 從 <hostname> 同步 skills <YYMMDDHHmm>`
-  - 僅 claude/agents/ 變更 → `sync: 從 <hostname> 同步 agents <YYMMDDHHmm>`
-  - 設定 + skills（無 agents）→ `sync: 從 <hostname> 同步設定與 skills <YYMMDDHHmm>`
-  - 設定 + agents（無 skills）→ `sync: 從 <hostname> 同步設定與 agents <YYMMDDHHmm>`
-  - skills + agents（無設定）→ `sync: 從 <hostname> 同步 skills 與 agents <YYMMDDHHmm>`
-  - 三者皆有 → `sync: 從 <hostname> 同步設定 <YYMMDDHHmm>`
+- 動作：`git add claude/ skills-lock.json && git commit -m "sync: 從 <hostname> 同步 <YYMMDDHHmm>" && git push`
 - 成功後顯示 `✅ 已 push 到 remote`
 - 失敗則顯示 `❌ Push 失敗：<錯誤訊息>，請手動處理`
 
 #### 2. 自行處理
 - label: `自行處理`
 - description: `不執行 git 操作，稍後自行 commit 與 push`
-- preview:
-  ```
-  不執行任何 git 操作
-
-  請自行執行：
-  git add claude/ skills-lock.json
-  git commit -m "sync: 從 <hostname> 同步設定 <YYMMDDHHmm>"
-  git push
-  ```
 
 ---
 
 ## 步驟 8：完成摘要
 
-若有任何操作執行過，顯示最終同步結果摘要，格式示例：
+顯示最終同步結果摘要，格式示例：
 ```
 ✅ sync-ai 完成
 
@@ -786,5 +366,4 @@
   }
   ```
   `computedHash` 留空字串（無法自動計算，不影響安裝）
-- **Agents 路徑**：使用相對於 `claude/agents/` 或 `~/.claude/agents/` 的相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）進行比對
-- **Agents 目錄建立**：複製 agent 前，若目標目錄不存在，自動建立（`mkdir -p`）；若 `~/.claude/agents/` 本身不存在，同樣自動建立
+- **Agents**：使用相對路徑比對（如 `awesome-claude-code-subagents/backend-developer.md`）；複製前若目標目錄不存在自動 `mkdir -p`
