@@ -114,15 +114,13 @@ node .claude/commands/sync-ai-diff.js
 
 #### 3. 用 VS Code 手動合併（⚠️ 此選項容易被遺漏，務必包含）
 - label: `用 VS Code 手動合併`
-- description: `開啟 VS Code 直接編輯 repo 檔案，儲存並關閉 tab 後繼續`
+- description: `開啟 VS Code diff editor，左側本機（唯讀），右側 repo（可編輯），關閉後繼續`
 - 動作（CLAUDE.md）：
-  1. 執行 `node .claude/commands/sync-ai-apply.js --action conflict-markers --file claude-md` 產生衝突標記並寫入 `claude/CLAUDE.md`
-  2. 執行 `code --wait "claude/CLAUDE.md"`，阻塞等待用戶在 VS Code 中解決衝突並關閉 tab
-  3. 讀取 `claude/CLAUDE.md` 內容作為合併結果
+  1. 執行 `code --wait --diff ~/.claude/CLAUDE.md claude/CLAUDE.md`，阻塞等待用戶在 VS Code diff editor 中編輯右側並關閉 tab
+  2. 讀取 `claude/CLAUDE.md` 內容作為合併結果
 - 動作（settings.json）：
-  1. 執行 `node .claude/commands/sync-ai-apply.js --action conflict-markers` 產生衝突標記並寫入 `claude/settings.json`（自動移除裝置特定欄位）
-  2. 執行 `code --wait "claude/settings.json"`，阻塞等待用戶解決衝突並關閉 tab
-  3. 讀取 `claude/settings.json` 內容作為合併結果
+  1. 執行 `code --wait --diff ~/.claude/settings.json claude/settings.json`，阻塞等待用戶在 VS Code diff editor 中編輯右側並關閉 tab（裝置特定欄位 `model`、`effortLevel`、`statusLine` 若出現在 diff 中，忽略即可，write-local 時會自動保留本機值）
+  2. 讀取 `claude/settings.json` 內容作為合併結果
 
 #### 4. 略過
 - label: `略過`

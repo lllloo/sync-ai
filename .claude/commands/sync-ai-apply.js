@@ -14,58 +14,6 @@ function readFileSafe(filePath) {
   catch { return null; }
 }
 
-// 完整 LCS diff（不過濾 context），回傳 { t: ' '|'-'|'+', l: string }[]
-function computeFullLcsDiff(aLines, bLines) {
-  const m = aLines.length, n = bLines.length;
-  const dp = new Array(m + 1);
-  for (let i = 0; i <= m; i++) dp[i] = new Uint32Array(n + 1);
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = aLines[i - 1] === bLines[j - 1]
-        ? dp[i - 1][j - 1] + 1
-        : Math.max(dp[i - 1][j], dp[i][j - 1]);
-
-  const ops = [];
-  let i = m, j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && aLines[i - 1] === bLines[j - 1]) {
-      ops.push({ t: ' ', l: aLines[i - 1] }); i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      ops.push({ t: '+', l: bLines[j - 1] }); j--;
-    } else {
-      ops.push({ t: '-', l: aLines[i - 1] }); i--;
-    }
-  }
-  ops.reverse();
-  return ops;
-}
-
-// 以 LCS diff 產生含 git 衝突標記的文字
-function buildConflictContent(repoLines, localLines, repoLabel, localLabel) {
-  const ops = computeFullLcsDiff(repoLines, localLines);
-  const output = [];
-  let i = 0;
-  while (i < ops.length) {
-    if (ops[i].t === ' ') {
-      output.push(ops[i].l);
-      i++;
-    } else {
-      const repoBlock = [], localBlock = [];
-      while (i < ops.length && ops[i].t !== ' ') {
-        if (ops[i].t === '-') repoBlock.push(ops[i].l);
-        else                  localBlock.push(ops[i].l);
-        i++;
-      }
-      output.push(`<<<<<<< ${repoLabel}`);
-      output.push(...repoBlock);
-      output.push('=======');
-      output.push(...localBlock);
-      output.push(`>>>>>>> ${localLabel}`);
-    }
-  }
-  return output.join('\n');
-}
-
 // key 排序 JSON stringify
 function stableStringify(obj) {
   return JSON.stringify(obj, (key, val) => {
@@ -99,50 +47,6 @@ function deepEqual(a, b) {
   return false;
 }
 
-// ─── conflict-markers ─────────────────────────────────────
-
-function conflictMarkersSettings() {
-  const repoPath  = path.join(REPO_ROOT, 'claude', 'settings.json');
-  const localPath = path.join(HOME, '.claude', 'settings.json');
-
-  let repoRaw = {}, localRaw = {};
-  try { repoRaw  = JSON.parse(readFileSafe(repoPath)  ?? '{}'); } catch {}
-  try { localRaw = JSON.parse(readFileSafe(localPath) ?? '{}'); } catch {}
-
-  // 移除裝置特定欄位
-  const strip = obj => Object.fromEntries(
-    Object.entries(obj).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k))
-  );
-
-  const content = buildConflictContent(
-    stableStringify(strip(repoRaw)).split('\n'),
-    stableStringify(strip(localRaw)).split('\n'),
-    'repo (claude/settings.json)',
-    'local (~/.claude/settings.json)'
-  );
-
-  fs.writeFileSync(repoPath, content + '\n', 'utf8');
-  return { success: true };
-}
-
-function conflictMarkersClaudeMd() {
-  const repoPath  = path.join(REPO_ROOT, 'claude', 'CLAUDE.md');
-  const localPath = path.join(HOME, '.claude', 'CLAUDE.md');
-
-  const repoContent  = readFileSafe(repoPath)  ?? '';
-  const localContent = readFileSafe(localPath) ?? '';
-
-  const content = buildConflictContent(
-    repoContent.split('\n'),
-    localContent.split('\n'),
-    'repo (claude/CLAUDE.md)',
-    'local (~/.claude/CLAUDE.md)'
-  );
-
-  fs.writeFileSync(repoPath, content + '\n', 'utf8');
-  return { success: true };
-}
-
 // ─── check-same ───────────────────────────────────────────
 
 function checkSameSettings() {
@@ -155,16 +59,16 @@ function checkSameSettings() {
   try { localRaw = JSON.parse(readFileSafe(localPath) ?? '{}'); }
   catch { return { same: false, error: 'local parse error' }; }
 
-  const localClean = Object.fromEntries(
-    Object.entries(localRaw).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k))
+  const strip = obj => Object.fromEntries(
+    Object.entries(obj).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k))
   );
-  return { same: deepEqual(repoRaw, localClean) };
+  return { same: deepEqual(strip(repoRaw), strip(localRaw)) };
 }
 
 function checkSameClaudeMd() {
   const repoContent  = readFileSafe(path.join(REPO_ROOT, 'claude', 'CLAUDE.md')) ?? '';
   const localContent = readFileSafe(path.join(HOME, '.claude', 'CLAUDE.md'))     ?? '';
-  return { same: repoContent === localContent };
+  return { same: repoContent.replace(/\r\n/g, '\n') === localContent.replace(/\r\n/g, '\n') };
 }
 
 // ─── write-local ──────────────────────────────────────────
@@ -206,14 +110,12 @@ const file   = getArg('--file') ?? 'settings-json'; // 預設 settings-json
 
 let result;
 try {
-  if (action === 'conflict-markers') {
-    result = file === 'claude-md' ? conflictMarkersClaudeMd() : conflictMarkersSettings();
-  } else if (action === 'check-same') {
+  if (action === 'check-same') {
     result = file === 'claude-md' ? checkSameClaudeMd() : checkSameSettings();
   } else if (action === 'write-local') {
     result = file === 'claude-md' ? writeLocalClaudeMd() : writeLocalSettings();
   } else {
-    result = { error: `Unknown --action: ${action}. 可用值：conflict-markers | check-same | write-local` };
+    result = { error: `Unknown --action: ${action}. 可用值：check-same | write-local` };
   }
 } catch (e) {
   result = { success: false, error: e.message };
