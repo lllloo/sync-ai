@@ -26,3 +26,14 @@
 ## 計畫完成後的操作
 
 當完成計畫模式並準備執行時，**應主動詢問是否將計畫內容記錄到專案的 `plan.md` 檔案中**。
+
+## Obsidian
+
+- 用戶說「ob」即指 Obsidian
+
+### CLI 已知問題
+
+`daily:append` 有 bug，會回傳 exit code 127。改用：
+
+1. `obsidian daily:path` 取得今日路徑
+2. `obsidian append path="<date>.md" content="內容"`
