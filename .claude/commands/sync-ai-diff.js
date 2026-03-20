@@ -15,10 +15,6 @@ function readFileSafe(filePath) {
   catch { return null; }
 }
 
-function stripAnsi(str) {
-  return str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '');
-}
-
 // LCS DP diff，回傳行陣列，每行前綴 '  '（context）、'- '（a only）、'+ '（b only）
 function computeLcsDiff(aLines, bLines) {
   const m = aLines.length, n = bLines.length;
@@ -236,16 +232,14 @@ async function diffSkills() {
   let installedSet = new Set();
   let warning = null;
   try {
-    const out = execSync('npx skills list -g --agent claude-code', {
+    const out = execSync('npx skills list -g --json', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    const clean = stripAnsi(out);
-    for (const line of clean.split('\n')) {
-      // 2 spaces indent + skill-name + whitespace + path
-      const m = line.match(/^  ([a-z][a-z0-9-]+)\s+(\S+)/);
+    const skills = JSON.parse(out);
+    for (const skill of skills) {
       // 只計入套件型 skill（路徑在 .agents/ 下），排除自行建立的（.claude/skills/）
-      if (m && m[2].includes('.agents')) installedSet.add(m[1]);
+      if (skill.path && skill.path.includes('.agents')) installedSet.add(skill.name);
     }
   } catch (e) {
     warning = `無法執行 npx skills list：${e.message.split('\n')[0]}`;
