@@ -25,7 +25,7 @@ node .claude/commands/sync-ai-diff.js
 ```json
 {
   "claudeMd":    { "same": bool, "diff": "...", "repoContent": "...", "localContent": "..." },
-  "settingsJson": { "same": bool, "diff": "...", "deviceKeys": { "model": null, "statusLine": {...} } },
+  "settingsJson": { "same": bool, "diff": "...", "deviceKeys": { "model": null } },
   "skills":      { "same": bool, "lockOnly": [], "localOnly": [], "lockData": {...} },
   "agents":      { "same": bool, "repoOnly": [], "localOnly": [], "conflicts": [], "groups": [...] }
 }
@@ -33,7 +33,7 @@ node .claude/commands/sync-ai-diff.js
 
 各欄位說明：
 - `claudeMd.diff`：含 context 的 unified diff 文字（`  ` context、`- ` repo only、`+ ` local only）
-- `settingsJson.deviceKeys`：本機的裝置特定欄位值（`model`、`effortLevel`、`statusLine`），覆蓋本機時需注入回去
+- `settingsJson.deviceKeys`：本機的裝置特定欄位值（`model`、`effortLevel`），覆蓋本機時需注入回去
 - `skills.lockOnly`：在 lock 但未安裝的 skill names；`localOnly`：已安裝但不在 lock 的 skill names
 - `agents.groups`：群組化結果，`level` 為 `"package"` 或 `"file"`，`type` 為 `"repoOnly"`、`"localOnly"` 或 `"conflict"`
 
@@ -119,7 +119,7 @@ node .claude/commands/sync-ai-diff.js
   1. 執行 `code --wait --diff ~/.claude/CLAUDE.md claude/CLAUDE.md`，阻塞等待用戶在 VS Code diff editor 中編輯右側並關閉 tab
   2. 讀取 `claude/CLAUDE.md` 內容作為合併結果
 - 動作（settings.json）：
-  1. 執行 `code --wait --diff ~/.claude/settings.json claude/settings.json`，阻塞等待用戶在 VS Code diff editor 中編輯右側並關閉 tab（裝置特定欄位 `model`、`effortLevel`、`statusLine` 若出現在 diff 中，忽略即可，write-local 時會自動保留本機值）
+  1. 執行 `code --wait --diff ~/.claude/settings.json claude/settings.json`，阻塞等待用戶在 VS Code diff editor 中編輯右側並關閉 tab（裝置特定欄位 `model`、`effortLevel` 若出現在 diff 中，忽略即可，write-local 時會自動保留本機值）
   2. 讀取 `claude/settings.json` 內容作為合併結果
 
 #### 4. 略過
@@ -131,7 +131,7 @@ node .claude/commands/sync-ai-diff.js
 
 - 將合併結果寫入：
   - `claude/CLAUDE.md`
-  - `claude/settings.json`（**裝置特定欄位 `model`、`effortLevel`、`statusLine` 不寫入 repo**）
+  - `claude/settings.json`（**裝置特定欄位 `model`、`effortLevel` 不寫入 repo**）
 - 完成後顯示 `✅ 設定已合併至 repo`
 
 ### 4.3 確認並覆蓋本機
@@ -150,6 +150,7 @@ node .claude/commands/sync-ai-diff.js
 - 動作：
   1. 執行 `node .claude/commands/sync-ai-apply.js --action write-local --file claude-md` 將 `claude/CLAUDE.md` 複製到 `~/.claude/CLAUDE.md`
   2. 執行 `node .claude/commands/sync-ai-apply.js --action write-local` 將 `claude/settings.json` 注入裝置特定欄位後寫入 `~/.claude/settings.json`
+  3. 執行 `cp claude/statusline.sh ~/.claude/statusline.sh`（無條件複製，確保各裝置都有此檔案）
 - 完成後顯示 `✅ 已覆蓋本機設定檔`
 
 #### 2. 跳過

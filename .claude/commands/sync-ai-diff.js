@@ -310,10 +310,10 @@ async function main() {
   const pick = r => r.status === 'fulfilled' ? r.value : { error: r.reason?.message ?? String(r.reason) };
 
   const result = {
-    claudeMd:    pick(r1),
+    claudeMd:     pick(r1),
     settingsJson: pick(r2),
-    skills:      pick(r3),
-    agents:      pick(r4),
+    skills:       pick(r3),
+    agents:       pick(r4),
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');

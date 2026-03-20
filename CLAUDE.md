@@ -17,12 +17,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|------|
 | `claude/CLAUDE.md` | 同步的全域 Claude 指示，對應 `~/.claude/CLAUDE.md` |
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
+| `claude/statusline.sh` | statusLine 使用的 shell script，對應 `~/.claude/statusline.sh`（write-local 時無條件複製） |
 | `claude/agents/` | 同步的全域 agents，對應 `~/.claude/agents/`（以 package 子目錄組織） |
 | `skills-lock.json` | 欲在各裝置全域安裝的 skills 清單（source of truth） |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 完整定義 |
 
 ## 注意事項
 
-- settings.json 的 `model`、`effortLevel`、`statusLine` 為裝置特定設定，比對時自動忽略
+- settings.json 的 `model`、`effortLevel` 為裝置特定設定，比對時自動忽略
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
 - agents 以檔案形式直接儲存於 `claude/agents/`，以 package 子目錄分組（如 `claude/agents/awesome-claude-code-subagents/`）
