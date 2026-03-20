@@ -243,8 +243,9 @@ async function diffSkills() {
     const clean = stripAnsi(out);
     for (const line of clean.split('\n')) {
       // 2 spaces indent + skill-name + whitespace + path
-      const m = line.match(/^  ([a-z][a-z0-9-]+)\s+/);
-      if (m) installedSet.add(m[1]);
+      const m = line.match(/^  ([a-z][a-z0-9-]+)\s+(\S+)/);
+      // 只計入套件型 skill（路徑在 .agents/ 下），排除自行建立的（.claude/skills/）
+      if (m && m[2].includes('.agents')) installedSet.add(m[1]);
     }
   } catch (e) {
     warning = `無法執行 npx skills list：${e.message.split('\n')[0]}`;
