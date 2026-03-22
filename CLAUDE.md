@@ -26,6 +26,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 注意事項
 
-- settings.json 的 `model`、`effortLevel` 為裝置特定設定，比對時自動忽略
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
 - agents 以檔案形式直接儲存於 `claude/agents/`，以 package 子目錄分組（如 `claude/agents/awesome-claude-code-subagents/`）

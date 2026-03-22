@@ -5,7 +5,7 @@ const os   = require('os');
 
 const REPO_ROOT          = path.resolve(__dirname, '..', '..');
 const HOME               = os.homedir();
-const DEVICE_SPECIFIC_KEYS = ['model', 'effortLevel', 'statusLine'];
+
 
 // ─── 工具函式 ─────────────────────────────────────────────
 
@@ -59,10 +59,7 @@ function checkSameSettings() {
   try { localRaw = JSON.parse(readFileSafe(localPath) ?? '{}'); }
   catch { return { same: false, error: 'local parse error' }; }
 
-  const strip = obj => Object.fromEntries(
-    Object.entries(obj).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k))
-  );
-  return { same: deepEqual(strip(repoRaw), strip(localRaw)) };
+  return { same: deepEqual(repoRaw, localRaw) };
 }
 
 function checkSameClaudeMd() {
@@ -77,17 +74,10 @@ function writeLocalSettings() {
   const repoPath  = path.join(REPO_ROOT, 'claude', 'settings.json');
   const localPath = path.join(HOME, '.claude', 'settings.json');
 
-  let merged = {}, localRaw = {};
-  try { merged  = JSON.parse(readFileSafe(repoPath)  ?? '{}'); }
-  catch { return { success: false, error: 'repo parse error' }; }
-  try { localRaw = JSON.parse(readFileSafe(localPath) ?? '{}'); } catch {}
+  const content = readFileSafe(repoPath);
+  if (content === null) return { success: false, error: 'repo file not found' };
 
-  // 將本機裝置特定欄位注入合併結果
-  for (const k of DEVICE_SPECIFIC_KEYS) {
-    if (localRaw[k] !== undefined) merged[k] = localRaw[k];
-  }
-
-  fs.writeFileSync(localPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(localPath, content, 'utf8');
   return { success: true };
 }
 

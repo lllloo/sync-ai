@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const HOME = os.homedir();
-const DEVICE_SPECIFIC_KEYS = ['model', 'effortLevel', 'statusLine'];
+
 
 // ─── 工具函式 ─────────────────────────────────────────────
 
@@ -203,24 +203,16 @@ async function diffSettingsJson() {
   try { repoRaw  = JSON.parse(readFileSafe(repoPath)  ?? '{}'); } catch {}
   try { localRaw = JSON.parse(readFileSafe(localPath) ?? '{}'); } catch {}
 
-  // 保存裝置特定欄位
-  const deviceKeys = {};
-  for (const k of DEVICE_SPECIFIC_KEYS) deviceKeys[k] = localRaw[k] ?? null;
-
-  // 移除裝置特定欄位後比對
-  const repoClean  = Object.fromEntries(Object.entries(repoRaw).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k)));
-  const localClean = Object.fromEntries(Object.entries(localRaw).filter(([k]) => !DEVICE_SPECIFIC_KEYS.includes(k)));
-
-  const same = deepEqual(repoClean, localClean);
+  const same = deepEqual(repoRaw, localRaw);
 
   let diff = '';
   if (!same) {
-    const repoLines  = stableStringify(repoClean).split('\n');
-    const localLines = stableStringify(localClean).split('\n');
+    const repoLines  = stableStringify(repoRaw).split('\n');
+    const localLines = stableStringify(localRaw).split('\n');
     diff = computeLcsDiff(repoLines, localLines).join('\n');
   }
 
-  return { same, diff, deviceKeys };
+  return { same, diff };
 }
 
 async function diffSkills() {
