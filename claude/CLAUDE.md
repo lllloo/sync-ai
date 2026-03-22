@@ -31,6 +31,10 @@
 
 用戶說「ob」即指 Obsidian。
 
+### 筆記操作（日記、建立筆記、搜尋）
+
+當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**，不要使用 `ob-note` skill。
+
 ### 網頁抓取
 
 **直接使用 WebFetch，不要觸發 `obsidian:defuddle` 技能。**
