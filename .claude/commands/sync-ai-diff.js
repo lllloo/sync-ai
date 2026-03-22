@@ -257,82 +257,53 @@ async function diffSkills() {
   };
 }
 
-async function diffAgents() {
-  const repoDir  = path.join(REPO_ROOT, 'claude', 'agents');
-  const localDir = path.join(HOME, '.claude', 'agents');
+// 通用目錄比對：repoSubdir 為 claude/ 下的子目錄名（如 'agents'、'commands'）
+function diffDirectory(repoSubdir) {
+  const repoDir  = path.join(REPO_ROOT, 'claude', repoSubdir);
+  const localDir = path.join(HOME, '.claude', repoSubdir);
 
-  const repoAgents  = scanAgents(repoDir);
-  const localAgents = scanAgents(localDir);
+  const repoFiles  = scanAgents(repoDir);
+  const localFiles = scanAgents(localDir);
 
   const repoOnly = [], localOnly = [], conflicts = [];
 
-  for (const [rel, content] of repoAgents) {
-    if (!localAgents.has(rel)) {
+  for (const [rel, content] of repoFiles) {
+    if (!localFiles.has(rel)) {
       repoOnly.push(rel);
-    } else if (localAgents.get(rel) !== content) {
-      const diffLines = computeLcsDiff(content.split('\n'), localAgents.get(rel).split('\n'));
+    } else if (localFiles.get(rel) !== content) {
+      const diffLines = computeLcsDiff(content.split('\n'), localFiles.get(rel).split('\n'));
       const changedCount = diffLines.filter(l => l.startsWith('- ') || l.startsWith('+ ')).length;
       let diffText = diffLines.slice(0, 10).join('\n');
       if (changedCount > 10) diffText += `\n...共 ${changedCount} 行差異`;
       conflicts.push({ path: rel, diff: diffText });
     }
   }
-  for (const [rel] of localAgents) {
-    if (!repoAgents.has(rel)) localOnly.push(rel);
+  for (const [rel] of localFiles) {
+    if (!repoFiles.has(rel)) localOnly.push(rel);
   }
 
-  const groups = groupAgents(repoOnly, localOnly, conflicts);
-
-  return {
-    same: repoOnly.length === 0 && localOnly.length === 0 && conflicts.length === 0,
-    repoOnly,
-    localOnly,
-    conflicts,
-    groups,
-  };
-}
-
-async function diffCommands() {
-  const repoDir  = path.join(REPO_ROOT, 'claude', 'commands');
-  const localDir = path.join(HOME, '.claude', 'commands');
-
-  const repoCommands  = scanAgents(repoDir);
-  const localCommands = scanAgents(localDir);
-
-  const repoOnly = [], localOnly = [], conflicts = [];
-
-  for (const [rel, content] of repoCommands) {
-    if (!localCommands.has(rel)) {
-      repoOnly.push(rel);
-    } else if (localCommands.get(rel) !== content) {
-      const diffLines = computeLcsDiff(content.split('\n'), localCommands.get(rel).split('\n'));
-      const changedCount = diffLines.filter(l => l.startsWith('- ') || l.startsWith('+ ')).length;
-      let diffText = diffLines.slice(0, 10).join('\n');
-      if (changedCount > 10) diffText += `\n...共 ${changedCount} 行差異`;
-      conflicts.push({ path: rel, diff: diffText });
-    }
-  }
-  for (const [rel] of localCommands) {
-    if (!repoCommands.has(rel)) localOnly.push(rel);
-  }
-
-  return {
+  const result = {
     same: repoOnly.length === 0 && localOnly.length === 0 && conflicts.length === 0,
     repoOnly,
     localOnly,
     conflicts,
   };
+
+  // agents 額外做 package 群組化
+  if (repoSubdir === 'agents') {
+    result.groups = groupAgents(repoOnly, localOnly, conflicts);
+  }
+
+  return result;
 }
 
 // ─── 主程式 ───────────────────────────────────────────────
 
 async function main() {
-  const [r1, r2, r3, r4, r5] = await Promise.allSettled([
+  const [r1, r2, r3] = await Promise.allSettled([
     diffClaudeMd(),
     diffSettingsJson(),
     diffSkills(),
-    diffAgents(),
-    diffCommands(),
   ]);
 
   const pick = r => r.status === 'fulfilled' ? r.value : { error: r.reason?.message ?? String(r.reason) };
@@ -341,8 +312,8 @@ async function main() {
     claudeMd:     pick(r1),
     settingsJson: pick(r2),
     skills:       pick(r3),
-    agents:       pick(r4),
-    commands:     pick(r5),
+    agents:       diffDirectory('agents'),
+    commands:     diffDirectory('commands'),
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');

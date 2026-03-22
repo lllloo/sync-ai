@@ -230,177 +230,61 @@ node .claude/commands/sync-ai-diff.js
 
 ---
 
-## 步驟 6：執行 — Agents 同步
+## 步驟 6：執行 — 目錄同步（Agents & Commands）
 
-若 `claude/agents/` 與 `~/.claude/agents/` 有差異，先顯示 `📋 Agents 差異（共 <N> 項），逐一處理：`，再依步驟 2 群組化結果逐一詢問（使用 AskUserQuestion，multiSelect false）。
+依序對 **Agents**（`claude/agents/` ↔ `~/.claude/agents/`）和 **Commands**（`claude/commands/` ↔ `~/.claude/commands/`）執行相同的目錄同步流程。以下用 `<DIR>` 代表目錄名（`agents` 或 `commands`），`<item>` 代表檔案相對路徑。
 
-### 6.1 repo 有、本機缺少的 agent（或整個 package）
+若該目錄有差異，先顯示 `📋 <DIR> 差異（共 <N> 項），逐一處理：`，再對每個差異項逐一詢問（AskUserQuestion，multiSelect false）。
 
-- **question**（package 單位）: `"<package-name>/" package 在 repo 中但本機缺少，如何處理？`
-- **question**（單一檔案）: `"<package/agent-name>" 在 repo 中但本機缺少，如何處理？`
-- **header**: `<package-name>` 或 `<package/agent-name>`
-- 選項（複製到本機 排第一）：
+**Agents 特殊處理**：agents 使用步驟 2 的 `groups` 群組化結果，若整個 package 同類型差異則以 package 單位詢問（`cp -r` / `rm -rf`）。Commands 為扁平結構，逐檔處理。
 
-#### 1. 複製到本機（同步）
-- label: `複製到本機（同步）`
-- description: `repo ✅ → 本機 ❌ → ✅　將 repo 的 agent 複製到 ~/.claude/agents/`
-- 動作：
-  - package 單位：`cp -r claude/agents/<package-name>/ ~/.claude/agents/<package-name>/`（若 `~/.claude/agents/` 不存在先 `mkdir -p`）
-  - 單一檔案：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`（確保目標目錄存在，`mkdir -p`）
+### 6.1 repo 有、本機缺少
 
-#### 2. 從 repo 移除
-- label: `從 repo 移除`
-- description: `repo ✅ → ❌ 本機 ❌　從 claude/agents/ 刪除，本機不新增`
-- 動作：刪除 `claude/agents/<path>` 對應檔案或目錄
+- **question**: `"<item>" 在 repo 中但本機缺少，如何處理？`
+- **header**: `<item>`
+- 選項：
 
-#### 3. 略過
-- label: `略過`
-- description: `repo ✅ 本機 ❌　保持現狀`
+| # | label | description | 動作 |
+|---|-------|-------------|------|
+| 1 | `複製到本機（同步）` | `repo ✅ → 本機 ❌ → ✅` | `mkdir -p` 目標目錄 → `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
+| 2 | `從 repo 移除` | `repo ✅ → ❌` | 刪除 `claude/<DIR>/<item>` |
+| 3 | `略過` | 保持現狀 | — |
 
-### 6.2 本機有、repo 缺少的 agent（或整個 package）
+### 6.2 本機有、repo 缺少
 
-- **question**（package 單位）: `"<package-name>/" package 已安裝但不在 repo 中，如何處理？`
-- **question**（單一檔案）: `"<package/agent-name>" 已安裝但不在 repo 中，如何處理？`
-- **header**: `<package-name>` 或 `<package/agent-name>`
-- 選項（加入 repo 排第一）：
+- **question**: `"<item>" 已存在但不在 repo 中，如何處理？`
+- **header**: `<item>`
+- 選項：
 
-#### 1. 加入 repo（同步）
-- label: `加入 repo（同步）`
-- description: `repo ❌ → ✅ 本機 ✅　將本機 agent 複製到 claude/agents/`
-- 動作：
-  - package 單位：`cp -r ~/.claude/agents/<package-name>/ claude/agents/<package-name>/`
-  - 單一檔案：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
+| # | label | description | 動作 |
+|---|-------|-------------|------|
+| 1 | `加入 repo（同步）` | `repo ❌ → ✅ 本機 ✅` | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
+| 2 | `從本機刪除` | `本機 ✅ → ❌` | `rm ~/.claude/<DIR>/<item>`（agents 刪除後若 package 目錄已空則 `rm -rf`） |
+| 3 | `略過` | 保持現狀 | — |
 
-#### 2. 從本機刪除
-- label: `從本機刪除`
-- description: `repo ❌ 本機 ✅ → ❌　從 ~/.claude/agents/ 移除此 agent`
-- 動作：
-  - package 單位：`rm -rf ~/.claude/agents/<package-name>/`
-  - 單一檔案：`rm ~/.claude/agents/<path>.md`；刪除後若 package 目錄已空，自動 `rm -rf ~/.claude/agents/<package-name>/`
+### 6.3 兩邊都有但內容不同
 
-#### 3. 略過
-- label: `略過`
-- description: `repo ❌ 本機 ✅　保持現狀`
+先顯示 diff（最多 10 行，超過顯示「...共 N 行差異」），再詢問：
 
-### 6.3 兩邊都有但內容不同的 agent
+- **question**: `"<item>" 內容不同，保留哪個版本？`
+- **header**: `<item>`
+- 選項：
 
-顯示 diff 後再詢問：
+| # | label | description | 動作 |
+|---|-------|-------------|------|
+| 1 | `用 repo 版` | `repo ✅ 本機 ⚠️ → ✅` | `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
+| 2 | `用本機版` | `repo ⚠️ → ✅ 本機 ✅` | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
+| 3 | `略過` | 保持現狀 | — |
 
-```
-📌 <package/agent-name> 差異：
-- <只在 repo 的行...>
-+ <只在本機的行...>
-（最多顯示 10 行差異，超過則顯示「...共 N 行差異」）
-```
+### 操作回饋
 
-- **question**: `"<package/agent-name>" 內容不同，保留哪個版本？`
-- **header**: `<package/agent-name>`
-- 選項（repo 版 排第一）：
-
-#### 1. 用 repo 版（同步到本機）
-- label: `用 repo 版`
-- description: `repo ✅ 本機 ⚠️ → ✅　以 claude/agents/ 的版本覆蓋本機`
-- 動作：`cp claude/agents/<path>.md ~/.claude/agents/<path>.md`
-
-#### 2. 用本機版（同步到 repo）
-- label: `用本機版`
-- description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
-- 動作：`cp ~/.claude/agents/<path>.md claude/agents/<path>.md`
-
-#### 3. 略過
-- label: `略過`
-- description: `repo ⚠️ 本機 ⚠️　保持現狀`
-
-- 操作回饋：
-  - 複製中：`⏳ 複製 <path>...`
-  - 成功：`✅ <動作> <path>`
-  - 失敗：`❌ 失敗：<path>（<錯誤訊息>）`
-
----
-
-## 步驟 6.5：執行 — Commands 同步
-
-若 `claude/commands/` 與 `~/.claude/commands/` 有差異，先顯示 `📋 Commands 差異（共 <N> 項），逐一處理：`，再對每個有差異的 command 逐一詢問（使用 AskUserQuestion，multiSelect false）。Commands 為扁平 `.md` 檔案，不需 package 群組化。
-
-### 6.5.1 repo 有、本機缺少的 command
-
-- **question**: `"<command-name>" 在 repo 中但本機缺少，如何處理？`
-- **header**: `<command-name>`
-- 選項（複製到本機 排第一）：
-
-#### 1. 複製到本機（同步）
-- label: `複製到本機（同步）`
-- description: `repo ✅ → 本機 ❌ → ✅　將 repo 的 command 複製到 ~/.claude/commands/`
-- 動作：`cp claude/commands/<name>.md ~/.claude/commands/<name>.md`（若 `~/.claude/commands/` 不存在先 `mkdir -p`）
-
-#### 2. 從 repo 移除
-- label: `從 repo 移除`
-- description: `repo ✅ → ❌ 本機 ❌　從 claude/commands/ 刪除，本機不新增`
-- 動作：刪除 `claude/commands/<name>.md`
-
-#### 3. 略過
-- label: `略過`
-- description: `repo ✅ 本機 ❌　保持現狀`
-
-### 6.5.2 本機有、repo 缺少的 command
-
-- **question**: `"<command-name>" 已存在但不在 repo 中，如何處理？`
-- **header**: `<command-name>`
-- 選項（加入 repo 排第一）：
-
-#### 1. 加入 repo（同步）
-- label: `加入 repo（同步）`
-- description: `repo ❌ → ✅ 本機 ✅　將本機 command 複製到 claude/commands/`
-- 動作：`cp ~/.claude/commands/<name>.md claude/commands/<name>.md`
-
-#### 2. 從本機刪除
-- label: `從本機刪除`
-- description: `repo ❌ 本機 ✅ → ❌　從 ~/.claude/commands/ 移除此 command`
-- 動作：`rm ~/.claude/commands/<name>.md`
-
-#### 3. 略過
-- label: `略過`
-- description: `repo ❌ 本機 ✅　保持現狀`
-
-### 6.5.3 兩邊都有但內容不同的 command
-
-顯示 diff 後再詢問：
-
-```
-📌 <command-name> 差異：
-- <只在 repo 的行...>
-+ <只在本機的行...>
-（最多顯示 10 行差異，超過則顯示「...共 N 行差異」）
-```
-
-- **question**: `"<command-name>" 內容不同，保留哪個版本？`
-- **header**: `<command-name>`
-- 選項（repo 版 排第一）：
-
-#### 1. 用 repo 版（同步到本機）
-- label: `用 repo 版`
-- description: `repo ✅ 本機 ⚠️ → ✅　以 claude/commands/ 的版本覆蓋本機`
-- 動作：`cp claude/commands/<name>.md ~/.claude/commands/<name>.md`
-
-#### 2. 用本機版（同步到 repo）
-- label: `用本機版`
-- description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
-- 動作：`cp ~/.claude/commands/<name>.md claude/commands/<name>.md`
-
-#### 3. 略過
-- label: `略過`
-- description: `repo ⚠️ 本機 ⚠️　保持現狀`
-
-- 操作回饋：
-  - 複製中：`⏳ 複製 <name>...`
-  - 成功：`✅ <動作> <name>`
-  - 失敗：`❌ 失敗：<name>（<錯誤訊息>）`
+- `⏳ 複製 <item>...` → `✅ <動作> <item>` 或 `❌ 失敗：<item>（<錯誤訊息>）`
 
 ---
 
 ## 步驟 7：Commit & Push
 
-若步驟 4-6.5 中有任何實際寫入 repo 的操作（`claude/CLAUDE.md`、`claude/settings.json`、`skills-lock.json`、`claude/agents/`、`claude/commands/` 有檔案新增/修改/刪除），使用 AskUserQuestion 詢問：
+若步驟 4-6 中有任何實際寫入 repo 的操作（`claude/CLAUDE.md`、`claude/settings.json`、`skills-lock.json`、`claude/agents/`、`claude/commands/` 有檔案新增/修改/刪除），使用 AskUserQuestion 詢問：
 
 - **question**: `repo 有變更，如何處理？`
 - **header**: `Commit & Push`
