@@ -96,7 +96,7 @@ function deepEqual(a, b) {
 }
 
 // 遞迴掃描 agents 目錄，回傳 Map<relPath, content>
-function scanAgents(dir) {
+function scanMdFiles(dir) {
   const result = new Map();
   if (!fs.existsSync(dir)) return result;
 
@@ -113,67 +113,6 @@ function scanAgents(dir) {
   }
   walk(dir);
   return result;
-}
-
-// agents 群組化：某 package 下所有差異同類型且無衝突 → package 單位
-function groupAgents(repoOnly, localOnly, conflicts) {
-  const pkgOf = p => p.includes('/') ? p.split('/')[0] : '';
-
-  // 收集所有涉及的 package
-  const pkgs = new Set([
-    ...repoOnly.map(pkgOf),
-    ...localOnly.map(pkgOf),
-    ...conflicts.map(c => pkgOf(c.path)),
-  ]);
-
-  const groups = [];
-  const processed = new Set();
-
-  for (const pkg of pkgs) {
-    if (pkg === '') continue; // 根目錄直接放的檔案，逐檔處理
-
-    const pRepo = repoOnly.filter(p => pkgOf(p) === pkg);
-    const pLocal = localOnly.filter(p => pkgOf(p) === pkg);
-    const pConflicts = conflicts.filter(c => pkgOf(c.path) === pkg);
-
-    const canGroup = pConflicts.length === 0 &&
-      (pRepo.length === 0 || pLocal.length === 0);
-
-    if (canGroup && (pRepo.length > 0 || pLocal.length > 0)) {
-      const type = pRepo.length > 0 ? 'repoOnly' : 'localOnly';
-      const files = type === 'repoOnly' ? pRepo : pLocal;
-      groups.push({ level: 'package', package: pkg, type, files });
-      files.forEach(f => processed.add(f));
-      pConflicts.forEach(c => processed.add(c.path));
-    } else {
-      // 逐檔
-      for (const f of pRepo) {
-        if (!processed.has(f)) groups.push({ level: 'file', path: f, type: 'repoOnly' });
-        processed.add(f);
-      }
-      for (const f of pLocal) {
-        if (!processed.has(f)) groups.push({ level: 'file', path: f, type: 'localOnly' });
-        processed.add(f);
-      }
-      for (const c of pConflicts) {
-        if (!processed.has(c.path)) groups.push({ level: 'file', path: c.path, type: 'conflict', diff: c.diff });
-        processed.add(c.path);
-      }
-    }
-  }
-
-  // 根目錄直接放的檔案（沒有 package 子目錄）
-  for (const f of repoOnly) {
-    if (!processed.has(f)) { groups.push({ level: 'file', path: f, type: 'repoOnly' }); processed.add(f); }
-  }
-  for (const f of localOnly) {
-    if (!processed.has(f)) { groups.push({ level: 'file', path: f, type: 'localOnly' }); processed.add(f); }
-  }
-  for (const c of conflicts) {
-    if (!processed.has(c.path)) { groups.push({ level: 'file', path: c.path, type: 'conflict', diff: c.diff }); processed.add(c.path); }
-  }
-
-  return groups;
 }
 
 // ─── 比對函式 ─────────────────────────────────────────────
@@ -254,8 +193,8 @@ function diffDirectory(repoSubdir) {
   const repoDir  = path.join(REPO_ROOT, 'claude', repoSubdir);
   const localDir = path.join(HOME, '.claude', repoSubdir);
 
-  const repoFiles  = scanAgents(repoDir);
-  const localFiles = scanAgents(localDir);
+  const repoFiles  = scanMdFiles(repoDir);
+  const localFiles = scanMdFiles(localDir);
 
   const repoOnly = [], localOnly = [], conflicts = [];
 
@@ -280,11 +219,6 @@ function diffDirectory(repoSubdir) {
     localOnly,
     conflicts,
   };
-
-  // agents 額外做 package 群組化
-  if (repoSubdir === 'agents') {
-    result.groups = groupAgents(repoOnly, localOnly, conflicts);
-  }
 
   return result;
 }
