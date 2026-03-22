@@ -34,7 +34,6 @@
       "Bash(mkdir:*)",
       "Bash(npx skills:*)",
       "Bash(node .claude/*)",
-      "Bash(python3:*)",
       "WebFetch(*)",
       "WebSearch"
     ]
