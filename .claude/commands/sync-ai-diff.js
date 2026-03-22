@@ -292,14 +292,47 @@ async function diffAgents() {
   };
 }
 
+async function diffCommands() {
+  const repoDir  = path.join(REPO_ROOT, 'claude', 'commands');
+  const localDir = path.join(HOME, '.claude', 'commands');
+
+  const repoCommands  = scanAgents(repoDir);
+  const localCommands = scanAgents(localDir);
+
+  const repoOnly = [], localOnly = [], conflicts = [];
+
+  for (const [rel, content] of repoCommands) {
+    if (!localCommands.has(rel)) {
+      repoOnly.push(rel);
+    } else if (localCommands.get(rel) !== content) {
+      const diffLines = computeLcsDiff(content.split('\n'), localCommands.get(rel).split('\n'));
+      const changedCount = diffLines.filter(l => l.startsWith('- ') || l.startsWith('+ ')).length;
+      let diffText = diffLines.slice(0, 10).join('\n');
+      if (changedCount > 10) diffText += `\n...共 ${changedCount} 行差異`;
+      conflicts.push({ path: rel, diff: diffText });
+    }
+  }
+  for (const [rel] of localCommands) {
+    if (!repoCommands.has(rel)) localOnly.push(rel);
+  }
+
+  return {
+    same: repoOnly.length === 0 && localOnly.length === 0 && conflicts.length === 0,
+    repoOnly,
+    localOnly,
+    conflicts,
+  };
+}
+
 // ─── 主程式 ───────────────────────────────────────────────
 
 async function main() {
-  const [r1, r2, r3, r4] = await Promise.allSettled([
+  const [r1, r2, r3, r4, r5] = await Promise.allSettled([
     diffClaudeMd(),
     diffSettingsJson(),
     diffSkills(),
     diffAgents(),
+    diffCommands(),
   ]);
 
   const pick = r => r.status === 'fulfilled' ? r.value : { error: r.reason?.message ?? String(r.reason) };
@@ -309,6 +342,7 @@ async function main() {
     settingsJson: pick(r2),
     skills:       pick(r3),
     agents:       pick(r4),
+    commands:     pick(r5),
   };
 
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');

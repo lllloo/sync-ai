@@ -27,7 +27,8 @@ node .claude/commands/sync-ai-diff.js
   "claudeMd":    { "same": bool, "diff": "...", "repoContent": "...", "localContent": "..." },
   "settingsJson": { "same": bool, "diff": "...", "deviceKeys": { "model": null } },
   "skills":      { "same": bool, "lockOnly": [], "localOnly": [], "lockData": {...} },
-  "agents":      { "same": bool, "repoOnly": [], "localOnly": [], "conflicts": [], "groups": [...] }
+  "agents":      { "same": bool, "repoOnly": [], "localOnly": [], "conflicts": [], "groups": [...] },
+  "commands":    { "same": bool, "repoOnly": [], "localOnly": [], "conflicts": [] }
 }
 ```
 
@@ -36,6 +37,7 @@ node .claude/commands/sync-ai-diff.js
 - `settingsJson.deviceKeys`：本機的裝置特定欄位值（`model`、`effortLevel`），覆蓋本機時需注入回去
 - `skills.lockOnly`：在 lock 但未安裝的 skill names；`localOnly`：已安裝但不在 lock 的 skill names
 - `agents.groups`：群組化結果，`level` 為 `"package"` 或 `"file"`，`type` 為 `"repoOnly"`、`"localOnly"` 或 `"conflict"`
+- `commands.repoOnly`：在 repo 但本機缺少的 command names；`localOnly`：本機有但不在 repo 的；`conflicts`：兩邊都有但內容不同的
 
 ---
 
@@ -48,6 +50,7 @@ node .claude/commands/sync-ai-diff.js
   settings.json    — ⚠️ 有差異
   Skills           — ⚠️ 有差異（詳見下方清單）
   Agents           — ⚠️ 有差異（詳見下方清單）
+  Commands         — ⚠️ 有差異（詳見下方清單）
 ```
 
 ### 若 settings.json 有差異，顯示具體 diff
@@ -82,6 +85,18 @@ node .claude/commands/sync-ai-diff.js
   awesome-claude-code-subagents/docker-expert        ✅      ❌ 缺少
   my-custom-package/my-agent                         ❌ 缺少  ✅
   everything-claude-code/code-reviewer               ⚠️ 衝突  ⚠️ 衝突
+```
+
+### 若 Commands 有差異，顯示清單
+
+格式示例（只列有差異的項目）：
+```
+📋 Commands 同步詳情：
+  command                    repo    本機(~/.claude/commands)
+  ──────────────────────────────────────────────────────────
+  ob.md                      ✅      ❌ 缺少
+  my-command.md              ❌ 缺少  ✅
+  shared-command.md          ⚠️ 衝突  ⚠️ 衝突
 ```
 
 ### 若全部一致
@@ -303,9 +318,89 @@ node .claude/commands/sync-ai-diff.js
 
 ---
 
+## 步驟 6.5：執行 — Commands 同步
+
+若 `claude/commands/` 與 `~/.claude/commands/` 有差異，先顯示 `📋 Commands 差異（共 <N> 項），逐一處理：`，再對每個有差異的 command 逐一詢問（使用 AskUserQuestion，multiSelect false）。Commands 為扁平 `.md` 檔案，不需 package 群組化。
+
+### 6.5.1 repo 有、本機缺少的 command
+
+- **question**: `"<command-name>" 在 repo 中但本機缺少，如何處理？`
+- **header**: `<command-name>`
+- 選項（複製到本機 排第一）：
+
+#### 1. 複製到本機（同步）
+- label: `複製到本機（同步）`
+- description: `repo ✅ → 本機 ❌ → ✅　將 repo 的 command 複製到 ~/.claude/commands/`
+- 動作：`cp claude/commands/<name>.md ~/.claude/commands/<name>.md`（若 `~/.claude/commands/` 不存在先 `mkdir -p`）
+
+#### 2. 從 repo 移除
+- label: `從 repo 移除`
+- description: `repo ✅ → ❌ 本機 ❌　從 claude/commands/ 刪除，本機不新增`
+- 動作：刪除 `claude/commands/<name>.md`
+
+#### 3. 略過
+- label: `略過`
+- description: `repo ✅ 本機 ❌　保持現狀`
+
+### 6.5.2 本機有、repo 缺少的 command
+
+- **question**: `"<command-name>" 已存在但不在 repo 中，如何處理？`
+- **header**: `<command-name>`
+- 選項（加入 repo 排第一）：
+
+#### 1. 加入 repo（同步）
+- label: `加入 repo（同步）`
+- description: `repo ❌ → ✅ 本機 ✅　將本機 command 複製到 claude/commands/`
+- 動作：`cp ~/.claude/commands/<name>.md claude/commands/<name>.md`
+
+#### 2. 從本機刪除
+- label: `從本機刪除`
+- description: `repo ❌ 本機 ✅ → ❌　從 ~/.claude/commands/ 移除此 command`
+- 動作：`rm ~/.claude/commands/<name>.md`
+
+#### 3. 略過
+- label: `略過`
+- description: `repo ❌ 本機 ✅　保持現狀`
+
+### 6.5.3 兩邊都有但內容不同的 command
+
+顯示 diff 後再詢問：
+
+```
+📌 <command-name> 差異：
+- <只在 repo 的行...>
++ <只在本機的行...>
+（最多顯示 10 行差異，超過則顯示「...共 N 行差異」）
+```
+
+- **question**: `"<command-name>" 內容不同，保留哪個版本？`
+- **header**: `<command-name>`
+- 選項（repo 版 排第一）：
+
+#### 1. 用 repo 版（同步到本機）
+- label: `用 repo 版`
+- description: `repo ✅ 本機 ⚠️ → ✅　以 claude/commands/ 的版本覆蓋本機`
+- 動作：`cp claude/commands/<name>.md ~/.claude/commands/<name>.md`
+
+#### 2. 用本機版（同步到 repo）
+- label: `用本機版`
+- description: `repo ⚠️ → ✅ 本機 ✅　以本機版本覆蓋 repo`
+- 動作：`cp ~/.claude/commands/<name>.md claude/commands/<name>.md`
+
+#### 3. 略過
+- label: `略過`
+- description: `repo ⚠️ 本機 ⚠️　保持現狀`
+
+- 操作回饋：
+  - 複製中：`⏳ 複製 <name>...`
+  - 成功：`✅ <動作> <name>`
+  - 失敗：`❌ 失敗：<name>（<錯誤訊息>）`
+
+---
+
 ## 步驟 7：Commit & Push
 
-若步驟 4-6 中有任何實際寫入 repo 的操作（`claude/CLAUDE.md`、`claude/settings.json`、`skills-lock.json`、`claude/agents/` 有檔案新增/修改/刪除），使用 AskUserQuestion 詢問：
+若步驟 4-6.5 中有任何實際寫入 repo 的操作（`claude/CLAUDE.md`、`claude/settings.json`、`skills-lock.json`、`claude/agents/`、`claude/commands/` 有檔案新增/修改/刪除），使用 AskUserQuestion 詢問：
 
 - **question**: `repo 有變更，如何處理？`
 - **header**: `Commit & Push`
@@ -335,6 +430,7 @@ node .claude/commands/sync-ai-diff.js
   settings.json — 已更新 repo（claude/） / 已更新本機（~/.claude/） / 無差異
   Skills        — 已安裝 2 個 / 已更新 skills-lock.json / 無差異
   Agents        — 已複製 3 個到本機 / 已加入 repo 1 個 / 無差異
+  Commands      — 已複製 1 個到本機 / 已加入 repo 2 個 / 無差異
 ```
 
 ---
@@ -363,3 +459,4 @@ node .claude/commands/sync-ai-diff.js
   ```
   加入 lock 時，`source` 填入 `"TODO: <owner>/<repo>"` 佔位，並提示用戶事後手動補充。`computedHash` 留空字串（無法自動計算，不影響安裝）
 - **Agents 路徑**：使用相對路徑（如 `awesome-claude-code-subagents/backend-developer.md`）；複製前若目標目錄不存在自動 `mkdir -p`
+- **Commands 路徑**：`claude/commands/` ↔ `~/.claude/commands/`，扁平結構（不需 package 群組化）；複製前若目標目錄不存在自動 `mkdir -p`

@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `~/.claude/settings.json`
 - 全域 skills（`npx skills list -g` ↔ `skills-lock.json`）
 - 全域 agents（`~/.claude/agents/` ↔ `claude/agents/`）
+- 全域 commands（`~/.claude/commands/` ↔ `claude/commands/`）
 
 ## 檔案結構
 
@@ -19,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `claude/settings.json` | 同步的 Claude Code 設定，對應 `~/.claude/settings.json` |
 | `claude/statusline.sh` | statusLine 使用的 shell script，對應 `~/.claude/statusline.sh`（write-local 時無條件複製） |
 | `claude/agents/` | 同步的全域 agents，對應 `~/.claude/agents/`（以 package 子目錄組織） |
+| `claude/commands/` | 同步的全域 commands，對應 `~/.claude/commands/`（扁平結構） |
 | `skills-lock.json` | 欲在各裝置全域安裝的 skills 清單（source of truth） |
 | `.claude/commands/sync-ai.md` | `/sync-ai` slash command 完整定義 |
 
