@@ -175,105 +175,55 @@ node .claude/commands/sync-ai-diff.js
 
 ## 步驟 5：執行 — Skills 同步
 
-若 skills-lock.json 與全域有差異，先顯示 `📋 Skills 差異（共 <N> 個），逐一處理：`，再對每個有差異的 skill 逐一詢問（使用 AskUserQuestion，multiSelect false）。
+若 skills-lock.json 與全域有差異，使用 **一個 multiSelect 問題** 讓用戶勾選要執行的同步動作。
 
-### 5.1 lock 有、本機缺少的 skill
+先顯示差異清單，再用 AskUserQuestion（multiSelect true）詢問：
 
-- **question**: `"<skill-name>" 在 lock 中但本機未安裝，如何處理？`
-- **header**: `<skill-name>`
-- 選項（repo/安裝 排第一）：
+- **question**: `Skills 有 <N> 個差異，勾選要執行的同步：`
+- **header**: `Skills`
+- **options**（只列出有差異的類型，最多 2 個選項）：
+  - 若有 lockOnly：label `安裝 <N> 個到本機`，description `<name1>, <name2>, ...`
+  - 若有 localOnly：label `加入 lock <N> 個`，description `<name1>, <name2>, ...`
+- 用戶勾選的項目執行對應動作，未勾選的略過
 
-#### 1. 安裝到本機（同步）
-- label: `安裝到本機（同步）`
-- description: `lock ✅ → 本機 ❌ → ✅　安裝此 skill 到 ~/.agents/`
+### 執行動作
 
-#### 2. 從 lock 移除
-- label: `從 lock 移除`
-- description: `lock ✅ → ❌　從 skills-lock.json 刪除，本機不安裝`
+- **安裝**：`npx skills add <source> -g -y --skill <name> --agent claude-code`
+- **加入 lock**：寫入 `skills-lock.json`，`source` 填 `"TODO: <owner>/<repo>"`，`sourceType: "github"`，`computedHash` 留空字串；完成後顯示 `⚠️ 請手動補充 skills-lock.json 中 <name> 的 source 欄位`
 
-#### 3. 略過
-- label: `略過`
-- description: `lock ✅ 本機 ❌　保持現狀`
+### 操作回饋
 
-- 執行動作：
-  - 安裝：`npx skills add <source> -g -y --skill <name> --agent claude-code`
-  - 從 lock 移除：更新 `skills-lock.json`，刪除對應 key
-
-### 5.2 本機有、lock 缺少的 skill
-
-- **question**: `"<skill-name>" 已安裝但不在 lock 中，如何處理？`
-- **header**: `<skill-name>`
-- 選項（加入 lock 排第一）：
-
-#### 1. 加入 lock（同步）
-- label: `加入 lock（同步）`
-- description: `lock ❌ → ✅ 本機 ✅　寫入 skills-lock.json 供其他裝置同步`
-
-#### 2. 從本機刪除
-- label: `從本機刪除`
-- description: `lock ❌ 本機 ✅ → ❌　從 ~/.agents/ 移除此 skill`
-
-#### 3. 略過
-- label: `略過`
-- description: `lock ❌ 本機 ✅　保持現狀`
-
-- 執行動作：
-  - 加入 lock：將 skill 寫入 `skills-lock.json`，`source` 填入 `"TODO: <owner>/<repo>"`，`sourceType: "github"`，`computedHash` 留空字串；完成後顯示 `⚠️ 請手動補充 skills-lock.json 中 <name> 的 source 欄位（格式：<owner>/<repo>）`
-  - 從本機刪除：`npx skills remove <name> -g -y`
-
-- 操作回饋：
-  - 安裝中：`⏳ 安裝 <skill-name>...`
-  - 刪除中：`⏳ 刪除 <skill-name>...`
-  - 成功：`✅ <動作> <skill-name>`
-  - 失敗：`❌ 失敗：<skill-name>（<錯誤訊息>）`，顯示後繼續處理下一個 skill（不中止整個流程）
+- `⏳ 安裝/加入 <skill-name>...` → `✅ <動作> <skill-name>` 或 `❌ 失敗：<skill-name>（<錯誤訊息>）`，失敗不中止流程
 
 ---
 
 ## 步驟 6：執行 — 目錄同步（Agents & Commands）
 
-依序對 **Agents**（`claude/agents/` ↔ `~/.claude/agents/`）和 **Commands**（`claude/commands/` ↔ `~/.claude/commands/`）執行相同的目錄同步流程。以下用 `<DIR>` 代表目錄名（`agents` 或 `commands`），`<item>` 代表檔案相對路徑。
+依序對 **Agents**（`claude/agents/` ↔ `~/.claude/agents/`）和 **Commands**（`claude/commands/` ↔ `~/.claude/commands/`）執行相同的目錄同步流程。以下用 `<DIR>` 代表目錄名（`agents` 或 `commands`）。
 
-若該目錄有差異，先顯示 `📋 <DIR> 差異（共 <N> 項），逐一處理：`，再對每個差異項逐一詢問（AskUserQuestion，multiSelect false）。
+若該目錄有差異，使用 **一個 multiSelect 問題** 讓用戶勾選要執行的同步動作。
 
-**Agents 特殊處理**：agents 使用步驟 2 的 `groups` 群組化結果，若整個 package 同類型差異則以 package 單位詢問（`cp -r` / `rm -rf`）。Commands 為扁平結構，逐檔處理。
+先顯示差異清單，再用 AskUserQuestion（multiSelect true）詢問：
 
-### 6.1 repo 有、本機缺少
+- **question**: `<DIR> 有 <N> 個差異，勾選要執行的同步：`
+- **header**: `<DIR>`
+- **options**（只列出有差異的類型，最多 3 個選項）：
+  - 若有 repoOnly：label `複製 <N> 個到本機`，description `repo → 本機：<item1>, <item2>, ...`
+  - 若有 localOnly：label `加入 repo <N> 個`，description `本機 → repo：<item1>, <item2>, ...`
+  - 若有 conflicts：label `衝突 <N> 個用 repo 版`，description `repo 覆蓋本機：<item1>, <item2>, ...`
+- 用戶勾選的項目執行對應動作，未勾選的略過
+- **衝突若不選 repo 版**，用戶可透過「Other」輸入指定用本機版的項目名
 
-- **question**: `"<item>" 在 repo 中但本機缺少，如何處理？`
-- **header**: `<item>`
-- 選項：
+**Agents 特殊處理**：agents 使用步驟 2 的 `groups` 群組化結果，若整個 package 同類型差異則以 package 單位處理（`cp -r` / `rm -rf`）。Commands 為扁平結構，逐檔處理。
 
-| # | label | description | 動作 |
-|---|-------|-------------|------|
-| 1 | `複製到本機（同步）` | `repo ✅ → 本機 ❌ → ✅` | `mkdir -p` 目標目錄 → `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
-| 2 | `從 repo 移除` | `repo ✅ → ❌` | 刪除 `claude/<DIR>/<item>` |
-| 3 | `略過` | 保持現狀 | — |
+### 執行動作
 
-### 6.2 本機有、repo 缺少
-
-- **question**: `"<item>" 已存在但不在 repo 中，如何處理？`
-- **header**: `<item>`
-- 選項：
-
-| # | label | description | 動作 |
-|---|-------|-------------|------|
-| 1 | `加入 repo（同步）` | `repo ❌ → ✅ 本機 ✅` | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
-| 2 | `從本機刪除` | `本機 ✅ → ❌` | `rm ~/.claude/<DIR>/<item>`（agents 刪除後若 package 目錄已空則 `rm -rf`） |
-| 3 | `略過` | 保持現狀 | — |
-
-### 6.3 兩邊都有但內容不同
-
-先顯示 diff（最多 10 行，超過顯示「...共 N 行差異」），再詢問：
-
-- **question**: `"<item>" 內容不同，保留哪個版本？`
-- **header**: `<item>`
-- 選項：
-
-| # | label | description | 動作 |
-|---|-------|-------------|------|
-| 1 | `用 repo 版` | `repo ✅ 本機 ⚠️ → ✅` | `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
-| 2 | `用本機版` | `repo ⚠️ → ✅ 本機 ✅` | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
-| 3 | `略過` | 保持現狀 | — |
+| 類型 | 動作 |
+|------|------|
+| repoOnly | `mkdir -p` 目標目錄 → `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
+| localOnly | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
+| conflicts（repo 版） | `cp claude/<DIR>/<item> ~/.claude/<DIR>/<item>` |
+| conflicts（本機版） | `cp ~/.claude/<DIR>/<item> claude/<DIR>/<item>` |
 
 ### 操作回饋
 
