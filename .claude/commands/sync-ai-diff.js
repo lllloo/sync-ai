@@ -102,6 +102,7 @@ function scanMdFiles(dir) {
 
   function walk(d) {
     for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
       const full = path.join(d, entry.name);
       if (entry.isDirectory()) {
         walk(full);

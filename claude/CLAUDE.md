@@ -33,13 +33,17 @@
 
 ### 筆記操作（日記、建立筆記、搜尋）
 
-當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**，不要使用 `ob-note` skill。
+當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**。
 
 ### 網頁抓取
 
 **直接使用 WebFetch，不要觸發 `obsidian:defuddle` 技能。**
 
 原因：`obsidian:defuddle` 會呼叫本機未安裝的 Defuddle CLI，必定失敗（由 Obsidian skill 內部觸發）。
+
+### 切版筆記查詢
+
+當用戶使用 pencil mcp 進行切版操作時，**先使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`** 搜尋 vault 中與切版相關的標籤（tag），再根據查詢結果繼續協助。
 
 ### CLI 已知問題
 
