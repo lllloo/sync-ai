@@ -18,14 +18,7 @@
       "Bash(tr:*)",
       "Bash(wc:*)",
       "Bash(find*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git tag:*)",
-      "Bash(git fetch:*)",
-      "Bash(git pull:*)",
-      "Bash(git status:*)",
+      "Bash(git *:*)",
       "Bash(gh api:*)",
       "Bash(gh repo:*)",
       "Bash(echo:*)",
@@ -33,11 +26,15 @@
       "Bash(ls:*)",
       "Bash(mkdir:*)",
       "Bash(npx skills:*)",
+      "Bash(npm run:*)",
       "Bash(node .claude/*)",
       "Bash(python3:*)",
       "WebFetch(*)",
       "WebSearch",
       "mcp__pencil"
+    ],
+    "deny": [
+      "Bash(git push:*)"
     ]
   },
   "statusLine": {

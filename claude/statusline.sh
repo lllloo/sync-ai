@@ -1,79 +1,71 @@
 #!/bin/bash
-# Read JSON data that Claude Code sends to stdin
+# Read JSON data from stdin
 input=$(cat)
 
-# Extract fields using bash built-in regex (no subprocesses)
+# Parse with bash regex (no subprocesses)
 [[ $input =~ \"display_name\":\"([^\"]+)\" ]] && MODEL="${BASH_REMATCH[1]}"
 [[ $input =~ \"current_dir\":\"([^\"]+)\" ]]  && DIR="${BASH_REMATCH[1]}"
 [[ $input =~ \"used_percentage\":([0-9]+) ]]   && PCT="${BASH_REMATCH[1]}"
 PCT=${PCT:-0}
 
-# Convert Windows path → Unix; derive FOLDER with parameter expansion (single subprocess)
-DIR_UNIX=$(printf '%s' "$DIR" | tr '\\' '/')
+# Windows path → Unix with parameter expansion (no subprocess)
+DIR_UNIX="${DIR//\\//}"
 FOLDER="${DIR_UNIX##*/}"
 
-# Extract rate_limits blocks
-FIVE_BLOCK=$(echo "$input" | grep -o '"five_hour":{"used_percentage":[0-9.]*,"resets_at":[0-9]*}')
-WEEK_BLOCK=$(echo "$input" | grep -o '"seven_day":{"used_percentage":[0-9.]*,"resets_at":[0-9]*}')
+# Parse rate_limits with bash regex (no subprocess)
+FIVE_PCT="" FIVE_RESETS=""
+WEEK_PCT="" WEEK_RESETS=""
+[[ $input =~ \"five_hour\":\{\"used_percentage\":([0-9.]+),\"resets_at\":([0-9]+)\} ]] && {
+    FIVE_PCT="${BASH_REMATCH[1]}"
+    FIVE_RESETS="${BASH_REMATCH[2]}"
+}
+[[ $input =~ \"seven_day\":\{\"used_percentage\":([0-9.]+),\"resets_at\":([0-9]+)\} ]] && {
+    WEEK_PCT="${BASH_REMATCH[1]}"
+    WEEK_RESETS="${BASH_REMATCH[2]}"
+}
 
-# Parse blocks with single sed call instead of grep|grep|cut chain
-FIVE_PCT=$(echo "$FIVE_BLOCK"    | sed -n 's/.*"used_percentage":\([0-9]*\).*/\1/p')
-FIVE_RESETS=$(echo "$FIVE_BLOCK" | sed -n 's/.*"resets_at":\([0-9]*\).*/\1/p')
-WEEK_PCT=$(echo "$WEEK_BLOCK"    | sed -n 's/.*"used_percentage":\([0-9]*\).*/\1/p')
-WEEK_RESETS=$(echo "$WEEK_BLOCK" | sed -n 's/.*"resets_at":\([0-9]*\).*/\1/p')
+# Current epoch via bash built-in (no subprocess)
+printf -v NOW_EPOCH '%(%s)T' -1
 
-# Function to format seconds into human-readable countdown
+# Format countdown — store result in _CD to avoid $() subshell
+_CD=""
 format_countdown() {
     local secs=$1
-    if [ -z "$secs" ] || [ "$secs" -le 0 ]; then
-        echo ""
-        return
-    fi
+    _CD=""
+    [[ -z "$secs" || "$secs" -le 0 ]] && return
     local days=$(( secs / 86400 ))
     local hours=$(( (secs % 86400) / 3600 ))
     local mins=$(( (secs % 3600) / 60 ))
-    if [ "$days" -gt 0 ]; then
-        echo "${days}d${hours}h"
-    elif [ "$hours" -gt 0 ]; then
-        echo "${hours}h${mins}m"
-    else
-        echo "${mins}m"
+    if   [ "$days"  -gt 0 ]; then _CD="${days}d${hours}h"
+    elif [ "$hours" -gt 0 ]; then _CD="${hours}h${mins}m"
+    else                          _CD="${mins}m"
     fi
 }
 
-NOW_EPOCH=$(date +%s)
-
 RATE_STR=""
 if [ -n "$FIVE_PCT" ]; then
-    FIVE_LABEL="5h:${FIVE_PCT}%"
+    printf -v FIVE_PCT_INT '%.0f' "$FIVE_PCT"
+    FIVE_LABEL="5h:${FIVE_PCT_INT}%"
     if [ -n "$FIVE_RESETS" ]; then
-        FIVE_REMAINING=$(( FIVE_RESETS - NOW_EPOCH ))
-        FIVE_CD=$(format_countdown "$FIVE_REMAINING")
-        [ -n "$FIVE_CD" ] && FIVE_LABEL="${FIVE_LABEL}(${FIVE_CD})"
+        format_countdown $(( FIVE_RESETS - NOW_EPOCH ))
+        [ -n "$_CD" ] && FIVE_LABEL="${FIVE_LABEL}(${_CD})"
     fi
     RATE_STR="${RATE_STR} | ${FIVE_LABEL}"
 fi
 if [ -n "$WEEK_PCT" ]; then
-    WEEK_LABEL="7d:${WEEK_PCT}%"
+    printf -v WEEK_PCT_INT '%.0f' "$WEEK_PCT"
+    WEEK_LABEL="7d:${WEEK_PCT_INT}%"
     if [ -n "$WEEK_RESETS" ]; then
-        WEEK_REMAINING=$(( WEEK_RESETS - NOW_EPOCH ))
-        WEEK_CD=$(format_countdown "$WEEK_REMAINING")
-        [ -n "$WEEK_CD" ] && WEEK_LABEL="${WEEK_LABEL}(${WEEK_CD})"
+        format_countdown $(( WEEK_RESETS - NOW_EPOCH ))
+        [ -n "$_CD" ] && WEEK_LABEL="${WEEK_LABEL}(${_CD})"
     fi
     RATE_STR="${RATE_STR} | ${WEEK_LABEL}"
 fi
 
-if GIT_OUT=$(git -C "$DIR_UNIX" status --porcelain=v1 -b 2>/dev/null); then
-    BRANCH=$(printf '%s\n' "$GIT_OUT" | sed -n 's/^## \([^. ]*\).*/\1/p')
-    STAGED=$(printf '%s\n' "$GIT_OUT"   | tail -n +2 | grep -c '^[^ ?]')
-    MODIFIED=$(printf '%s\n' "$GIT_OUT" | tail -n +2 | grep -c '^.[^ ?]')
-
-    GIT_STATUS=""
-    [ "$STAGED" -gt 0 ] && GIT_STATUS="${GIT_STATUS}+${STAGED}"
-    [ "$MODIFIED" -gt 0 ] && GIT_STATUS="${GIT_STATUS}~${MODIFIED}"
-    [ -n "$GIT_STATUS" ] && GIT_STATUS=" $GIT_STATUS"
-
-    echo "[$MODEL] 📁 $FOLDER | 🌿 $BRANCH$GIT_STATUS | ${PCT}% ctx${RATE_STR}"
+BRANCH_OUT=$(git -C "$DIR_UNIX" rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ -n "$BRANCH_OUT" ]; then
+    BRANCH="$BRANCH_OUT"
+    echo "[$MODEL] 📁 $FOLDER | 🌿 $BRANCH | ${PCT}% ctx${RATE_STR}"
 else
     echo "[$MODEL] 📁 $FOLDER | ${PCT}% ctx${RATE_STR}"
 fi
