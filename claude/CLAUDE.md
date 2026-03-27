@@ -41,10 +41,6 @@
 
 原因：`obsidian:defuddle` 會呼叫本機未安裝的 Defuddle CLI，必定失敗（由 Obsidian skill 內部觸發）。
 
-### 切版筆記查詢
-
-當用戶使用 pencil mcp 進行切版操作時，**先使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`** 搜尋 vault 中與切版相關的標籤（tag），再根據查詢結果繼續協助。
-
 ### CLI 已知問題
 
 `daily:append` 有 bug，會回傳 exit code 127。改用兩步驟：
