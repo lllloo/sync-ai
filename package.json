@@ -1,0 +1,10 @@
+{
+  "name": "sync-ai",
+  "version": "1.0.0",
+  "description": "跨裝置同步 Claude Code 設定",
+  "scripts": {
+    "push": "node sync.js push",
+    "pull": "node sync.js pull"
+  },
+  "private": true
+}

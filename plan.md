@@ -1,69 +1,139 @@
-# sync-ai 改善計畫
+# sync-ai 改寫為獨立 Node.js 腳本
 
-專案 review 後整理的待修項目，依優先度排序。
+## Context
 
----
+目前的 `/sync-ai` 依賴 Claude AI 來解讀 `sync-ai.md` 的指令並逐步執行，每次同步都需要 AI 在場。
+目標：改成可直接執行的 npm 指令，不依賴 AI，邏輯完全在腳本裡。
 
-## 優先處理
-
-### 1. 文件殘留的 `conflict-markers` 說明
-
-- **位置**：`.claude/commands/sync-ai.md` 第 348 行
-- **問題**：實作細節中仍提到 `conflict-markers` action，但 `sync-ai-apply.js` 已移除此 action（只剩 `check-same` 和 `write-local`）
-- **修正**：從 sync-ai.md 的實作細節中刪除 `conflict-markers` 相關描述
-
-### 2. diff / apply 共用程式碼重複
-
-- **位置**：`sync-ai-diff.js` 和 `sync-ai-apply.js`
-- **問題**：`readFileSafe`、`stableStringify`、`deepEqual`、`DEVICE_SPECIFIC_KEYS` 各自實作一份，未來修改忽略欄位清單容易漏改
-- **修正**：抽出 `sync-ai-utils.js` 共用模組，兩個腳本都 require 它
+兩個指令：
+- `npm run push` — **本機 → repo**：把本機設定上傳到 repo
+- `npm run pull` — **repo → 本機**：把 repo 設定套用到本機
 
 ---
 
-## 建議改進
+## 新流程
 
-### 3. `npx skills list` 解析脆弱性
+### `npm run push`（本機 → repo）
 
-- **位置**：`sync-ai-diff.js:247`
-- **問題**：用正則 `^  ([a-z][a-z0-9-]+)\s+(\S+)` 解析 CLI 輸出，格式變動會靜默失敗，所有 skill 被判為 lockOnly
-- **修正**：優先使用 `--json` 旗標（若支援）；或在解析結果為空時加 warning
+1. `git pull --ff-only`（失敗時中止並提示手動解決，避免覆蓋衝突）
+2. 複製本機檔案 → repo：
+   - `~/.claude/CLAUDE.md`         → `claude/CLAUDE.md`
+   - `~/.claude/settings.json`     → `claude/settings.json`（排除裝置特定欄位）
+   - `~/.claude/statusline.sh`     → `claude/statusline.sh`
+   - `~/.claude/agents/`           → `claude/agents/`（整目錄鏡像）
+   - `~/.claude/commands/`         → `claude/commands/`（整目錄鏡像，排除 sync-ai* 自身）
+3. 讀取 `~/.agents/.skill-lock.json` → 更新 repo 的 `skills-lock.json`（只保留 source、sourceType）
+4. `git add` → `git commit -m "sync: 從 <hostname> 同步 <YYMMDDHHmm>"` → `git push`
+5. 顯示摘要（哪些檔案有變動）
 
-### 4. README 與 CLAUDE.md 的裝置特定欄位描述不一致
+### `npm run pull`（repo → 本機）
 
-- **位置**：`README.md:38`、`CLAUDE.md` 注意事項
-- **問題**：README 提到 `statusLine` 為裝置特定設定，但 CLAUDE.md 只提 `model`、`effortLevel`（程式碼中三者皆有）
-- **修正**：統一文件描述，明確列出 `model`、`effortLevel`、`statusLine` 三個欄位
-
-### 5. .gitignore 補充
-
-- **位置**：`.gitignore`
-- **問題**：目前只有 `.agents/` 和 `.agent/`
-- **修正**：補上 `node_modules/` 和 `*.log`
-
-### 6. settings.json 權限補充
-
-- **位置**：`claude/settings.json` 的 `permissions.allow`
-- **問題**：同步流程步驟 7 需要 `git push` 和 `hostname`，但未列入允許清單，每次都會觸發確認
-- **修正**：視需求加入 `Bash(git push:*)`、`Bash(hostname:*)`
+1. `git pull --ff-only`（失敗時中止並提示）
+2. 複製 repo 檔案 → 本機：
+   - `claude/CLAUDE.md`       → `~/.claude/CLAUDE.md`
+   - `claude/settings.json`   → `~/.claude/settings.json`（**merge**：保留本機裝置特定欄位）
+   - `claude/statusline.sh`   → `~/.claude/statusline.sh`
+   - `claude/agents/`         → `~/.claude/agents/`（整目錄鏡像）
+   - `claude/commands/`       → `~/.claude/commands/`（整目錄鏡像）
+3. 比對 `skills-lock.json` 與 `~/.agents/.skill-lock.json`，對差異的 skill 執行：
+   `npx skills add -g <source> -s <skillname> -y`
+4. 顯示摘要（哪些檔案有更新、哪些 skills 有安裝）
 
 ---
 
-## 低優先 / 觀察
+## 重要細節
 
-### 7. deepEqual 陣列比較使用 Set 語義
+### settings.json 裝置特定欄位排除（push 時）
+同步時從 `~/.claude/settings.json` 讀取後，移除這些欄位再寫入 repo：
+- `model`
+- `effortLevel`
+- `statusLine`
 
-- **位置**：`sync-ai-diff.js:85-90`
-- **問題**：`[1,2]` 與 `[2,1]` 視為相同，對 `permissions.allow` 合理，但對有序陣列可能假陽性
-- **狀態**：目前情境合理，加個程式碼註解標明 intentional design 即可
+### settings.json merge 策略（pull 時）
+從 repo 套用時，先讀本機現有的 `settings.json`，保留裝置特定欄位，再用 repo 的其餘設定覆蓋：
+1. 讀本機，暫存 `model`、`effortLevel`、`statusLine`
+2. 以 repo 版本為基礎
+3. 將步驟 1 的值回填
 
-### 8. LCS Diff 記憶體風險
+### skills 同步策略
 
-- **位置**：`sync-ai-diff.js:26-32`
-- **問題**：O(m×n) 空間，大檔案會爆
-- **狀態**：目前同步的檔案都很小，暫不需處理
+**push**：讀取 `~/.agents/.skill-lock.json`，只抽取 `source`、`sourceType` 欄位寫入 repo 的 `skills-lock.json`。
 
-### 9. statusline.sh JSON 解析健壯性
+**pull**：比對 repo `skills-lock.json` 與本機 `~/.agents/.skill-lock.json`，對每個 repo 有但本機無的 skill（或 source 不同的），執行：
+```
+npx skills add -g <source> -s <skillname> -y
+```
+> 注意：`experimental_install` 只裝到專案目錄，不裝全域，所以用 `skills add -g`。
 
-- **位置**：`claude/statusline.sh:6-8`
-- **問題**：bash regex 抓 JSON 欄位，key 順序不同或值含跳脫引號時會失敗
-- **狀態**：Claude Code 輸入格式穩定，暫可接受
+---
+
+### agents / commands 鏡像策略
+**完整鏡像**：以 source 端為準。
+- `push`：本機有什麼 repo 就有什麼，本機沒有的 repo 也刪掉
+- `pull`：repo 有什麼本機就有什麼，repo 沒有的本機也刪掉
+
+### git pull 失敗處理
+`--ff-only` 失敗（有 diverge）時，**中止並顯示提示**，不繼續執行，讓用戶手動 `git pull` 解決衝突。
+
+### commands 目錄排除（push 時）
+`~/.claude/commands/` 裡的 `sync-ai.md`（舊的 slash command）不複製進 repo。
+
+---
+
+## 檔案異動
+
+### 新增
+- `sync.js`（根目錄）— 主腳本，無外部相依
+- `package.json`（根目錄）— 定義 `npm run push` / `npm run pull`
+
+### 刪除
+- `.claude/commands/sync-ai.md`
+- `.claude/commands/sync-ai-diff.js`
+- `.claude/commands/sync-ai-apply.js`
+
+### 修改
+- `CLAUDE.md`（專案）— 更新說明，改為 `npm run push` / `npm run pull`
+- `.gitignore` — 補上 `node_modules/`、`*.log`
+- `plan.md` — 本檔案
+
+---
+
+## sync.js 架構
+
+無外部相依，只用 Node.js built-in（`fs`、`path`、`os`、`child_process`）。
+
+```
+main(mode)                          // mode: 'push' | 'pull'
+  ├── gitPull()                     // 兩個 mode 都先 pull
+  ├── copyFile(src, dest)           // 單一檔案
+  ├── mergeSettingsJson(mode)       // push 排除裝置欄位；pull 保留裝置欄位
+  ├── mirrorDir(src, dest, exclude) // 整目錄鏡像
+  ├── syncSkills(mode)              // push：~/.agents/.skill-lock.json → skills-lock.json
+  │                                //  pull：skills-lock.json → npx skills add -g
+  └── gitCommitPush(changes)        // 僅 push mode 執行
+```
+
+`package.json` scripts：
+```json
+{
+  "scripts": {
+    "push": "node sync.js push",
+    "pull": "node sync.js pull"
+  }
+}
+```
+
+---
+
+## 驗證
+
+### push
+1. 執行 `npm run push`
+2. 確認 `claude/` 與 `~/.claude/` 一致
+3. 確認 `settings.json` 未含裝置特定欄位
+4. 確認 `git log` 有新 commit 且遠端已收到
+
+### pull
+1. 在另一台裝置（或手動修改 repo）執行 `npm run pull`
+2. 確認 `~/.claude/` 已更新為 repo 內容
+3. 確認本機的 `model`、`effortLevel`、`statusLine` 未被覆蓋

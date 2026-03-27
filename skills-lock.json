@@ -1,25 +1,21 @@
 {
   "version": 1,
   "skills": {
+    "vue-best-practices": {
+      "source": "vuejs-ai/skills",
+      "sourceType": "github"
+    },
     "create-adaptable-composable": {
       "source": "vuejs-ai/skills",
-      "sourceType": "github",
-      "computedHash": "2f215126499d29a733be980ef9ce8f4ffb5f25a8831aec965d86c0cd21b2c5d2"
+      "sourceType": "github"
     },
     "frontend-design": {
       "source": "anthropics/skills",
-      "sourceType": "github",
-      "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
-    },
-    "vue-best-practices": {
-      "source": "vuejs-ai/skills",
-      "sourceType": "github",
-      "computedHash": "3df585ad31aec78fe55c56c1411262737e6b231677a3153dec512a882fde80cd"
+      "sourceType": "github"
     },
     "skill-creator": {
       "source": "anthropics/skills",
-      "sourceType": "github",
-      "computedHash": "dfb0cb0957ebc8813b0b54b45615ca25293a4ed9991abff0c6c9deb6dd97c2c7"
+      "sourceType": "github"
     }
   }
 }
