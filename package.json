@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "跨裝置同步 Claude Code 設定",
   "scripts": {
-    "push": "node sync.js push",
-    "pull": "node sync.js pull"
+    "to-repo": "node sync.js to-repo",
+    "to-local": "node sync.js to-local"
   },
   "private": true
 }

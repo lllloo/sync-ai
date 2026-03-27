@@ -11,11 +11,11 @@ const REPO_ROOT = __dirname;
 const HOME = os.homedir();
 const CLAUDE_HOME = path.join(HOME, '.claude');
 const AGENTS_HOME = path.join(HOME, '.agents');
-const DEVICE_FIELDS = ['model', 'effortLevel', 'statusLine'];
+const DEVICE_FIELDS = ['model', 'effortLevel'];
 
 const mode = process.argv[2];
-if (mode !== 'push' && mode !== 'pull') {
-  console.error('用法: node sync.js push|pull');
+if (mode !== 'to-repo' && mode !== 'to-local') {
+  console.error('用法: node sync.js to-repo|to-local');
   process.exit(1);
 }
 
@@ -112,7 +112,7 @@ function mergeSettingsJson(mode) {
   const localPath = path.join(CLAUDE_HOME, 'settings.json');
   const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
 
-  if (mode === 'push') {
+  if (mode === 'to-repo') {
     if (!fs.existsSync(localPath)) return false;
     const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
     for (const field of DEVICE_FIELDS) delete local[field];
@@ -122,7 +122,7 @@ function mergeSettingsJson(mode) {
     fs.writeFileSync(repoPath, content);
     return true;
   } else {
-    // pull：repo 為基礎，保留本機裝置欄位
+    // to-local：repo 為基礎，保留本機裝置欄位
     if (!fs.existsSync(repoPath)) return false;
     const repo = JSON.parse(fs.readFileSync(repoPath, 'utf8'));
     const deviceValues = {};
@@ -146,7 +146,7 @@ function syncSkills(mode) {
   const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
   const changed = [];
 
-  if (mode === 'push') {
+  if (mode === 'to-repo') {
     if (!fs.existsSync(globalLockPath)) {
       console.log('  ⚠️  ~/.agents/.skill-lock.json 不存在，略過 skills 同步');
       return changed;
@@ -163,7 +163,7 @@ function syncSkills(mode) {
     }
     return changed;
   } else {
-    // pull：找出 repo 有但本機沒裝的 skill
+    // to-local：找出 repo 有但本機沒裝的 skill
     if (!fs.existsSync(repoLockPath)) {
       console.log('  ⚠️  skills-lock.json 不存在，略過 skills 同步');
       return changed;
@@ -193,15 +193,15 @@ function syncSkills(mode) {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
-  console.log(`\n🔄 sync-ai ${mode === 'push' ? '本機 → repo' : 'repo → 本機'}\n`);
+  console.log(`\n🔄 sync-ai ${mode === 'to-repo' ? '本機 → repo' : 'repo → 本機'}\n`);
 
   const changes = [];
 
-  if (mode === 'push') {
+  if (mode === 'to-repo') {
     if (copyFile(path.join(CLAUDE_HOME, 'CLAUDE.md'), path.join(REPO_ROOT, 'claude', 'CLAUDE.md')))
       changes.push('claude/CLAUDE.md');
 
-    if (mergeSettingsJson('push'))
+    if (mergeSettingsJson('to-repo'))
       changes.push('claude/settings.json');
 
     if (copyFile(path.join(CLAUDE_HOME, 'statusline.sh'), path.join(REPO_ROOT, 'claude', 'statusline.sh')))
@@ -218,12 +218,12 @@ function main() {
       ['sync-ai*'],
     )) changes.push(`claude/commands/${f}`);
 
-    for (const f of syncSkills('push')) changes.push(f);
+    for (const f of syncSkills('to-repo')) changes.push(f);
   } else {
     if (copyFile(path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), path.join(CLAUDE_HOME, 'CLAUDE.md')))
       changes.push('~/.claude/CLAUDE.md');
 
-    if (mergeSettingsJson('pull'))
+    if (mergeSettingsJson('to-local'))
       changes.push('~/.claude/settings.json');
 
     if (copyFile(path.join(REPO_ROOT, 'claude', 'statusline.sh'), path.join(CLAUDE_HOME, 'statusline.sh')))
@@ -239,7 +239,7 @@ function main() {
       path.join(CLAUDE_HOME, 'commands'),
     )) changes.push(`~/.claude/commands/${f}`);
 
-    for (const f of syncSkills('pull')) changes.push(f);
+    for (const f of syncSkills('to-local')) changes.push(f);
   }
 
   // 摘要
