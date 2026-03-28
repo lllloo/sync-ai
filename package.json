@@ -4,6 +4,7 @@
   "description": "跨裝置同步 Claude Code 設定",
   "scripts": {
     "diff": "node sync.js diff",
+    "skills:diff": "node sync.js skills:diff",
     "to-repo": "node sync.js to-repo",
     "to-local": "node sync.js to-local"
   },

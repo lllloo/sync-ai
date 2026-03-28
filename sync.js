@@ -25,8 +25,8 @@ const col = {
 };
 
 const mode = process.argv[2];
-if (!['to-repo', 'to-local', 'diff'].includes(mode)) {
-  console.error('用法: node sync.js to-repo|to-local|diff');
+if (!['to-repo', 'to-local', 'diff', 'skills:diff'].includes(mode)) {
+  console.error('用法: node sync.js to-repo|to-local|diff|skills:diff');
   process.exit(1);
 }
 
@@ -53,6 +53,7 @@ function getFiles(dir, base = '') {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const result = [];
   for (const entry of entries) {
+    if (GLOBAL_EXCLUDE.includes(entry.name)) continue;
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       result.push(...getFiles(path.join(dir, entry.name), rel));
@@ -63,10 +64,14 @@ function getFiles(dir, base = '') {
   return result;
 }
 
+// 永遠排除的檔案
+const GLOBAL_EXCLUDE = ['.DS_Store'];
+
 function matchExclude(rel, pattern) {
   if (pattern.endsWith('*')) return rel.startsWith(pattern.slice(0, -1));
   return rel === pattern;
 }
+
 
 // 整目錄鏡像：以 src 為準，dest 多餘的刪掉
 function mirrorDir(src, dest, excludePatterns = [], force = false) {
@@ -92,7 +97,7 @@ function mirrorDir(src, dest, excludePatterns = [], force = false) {
 
   if (fs.existsSync(dest)) {
     for (const rel of getFiles(dest)) {
-      if (!srcFiles.has(rel)) {
+      if (!srcFiles.has(rel) && !excludePatterns.some(p => matchExclude(rel, p))) {
         fs.rmSync(path.join(dest, rel));
         changed.push(`[刪除] ${rel}`);
       }
@@ -196,52 +201,62 @@ function mergeSettingsJson(m) {
   }
 }
 
-// ── Skills ─────────────────────────────────────────────────────────────────
+// ── skills:diff mode ───────────────────────────────────────────────────────
 
-function syncSkills(m) {
-  const globalLockPath = path.join(AGENTS_HOME, '.skill-lock.json');
+function runSkillsDiff() {
+  console.log(col.bold('\n📦 Skills 差異比對\n'));
+
   const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
-  const changed = [];
+  const localLockPath = path.join(AGENTS_HOME, '.skill-lock.json');
 
-  if (m === 'to-repo') {
-    if (!fs.existsSync(globalLockPath)) {
-      console.log('  ⚠️  ~/.agents/.skill-lock.json 不存在，略過 skills 同步');
-      return changed;
-    }
-    const global = JSON.parse(fs.readFileSync(globalLockPath, 'utf8'));
-    const skills = {};
-    for (const [name, info] of Object.entries(global.skills || {})) {
-      skills[name] = { source: info.source, sourceType: info.sourceType };
-    }
-    const content = JSON.stringify({ version: 1, skills }, null, 2) + '\n';
-    fs.writeFileSync(repoLockPath, content);
-    changed.push(`skills-lock.json (${Object.keys(skills).length} skills)`);
-    return changed;
-  } else {
-    if (!fs.existsSync(repoLockPath)) {
-      console.log('  ⚠️  skills-lock.json 不存在，略過 skills 同步');
-      return changed;
-    }
-    const repo = JSON.parse(fs.readFileSync(repoLockPath, 'utf8'));
-    const localSkills = new Set();
-    if (fs.existsSync(globalLockPath)) {
-      const global = JSON.parse(fs.readFileSync(globalLockPath, 'utf8'));
-      for (const name of Object.keys(global.skills || {})) localSkills.add(name);
-    }
-    for (const [name, info] of Object.entries(repo.skills || {})) {
-      if (!localSkills.has(name)) {
-        console.log(`  📦 安裝 skill: ${name} (${info.source})`);
-        const result = run(`npx skills add -g ${info.source} -s ${name} -y`);
-        if (result.status === 0) {
-          changed.push(`skill: ${name}`);
-          console.log(`  ✅ ${name} 安裝完成`);
-        } else {
-          console.error(`  ❌ ${name} 安裝失敗：${result.stderr || result.stdout}`);
-        }
-      }
-    }
-    return changed;
+  const repoSkills = fs.existsSync(repoLockPath)
+    ? JSON.parse(fs.readFileSync(repoLockPath, 'utf8')).skills || {}
+    : {};
+  const localSkills = fs.existsSync(localLockPath)
+    ? JSON.parse(fs.readFileSync(localLockPath, 'utf8')).skills || {}
+    : {};
+
+  const onlyInRepo  = Object.keys(repoSkills).filter(n => !localSkills[n]);
+  const onlyInLocal = Object.keys(localSkills).filter(n => !repoSkills[n]);
+  const inBoth      = Object.keys(repoSkills).filter(n =>  localSkills[n]);
+
+  if (inBoth.length === 0 && onlyInRepo.length === 0 && onlyInLocal.length === 0) {
+    console.log(col.green('  ✅ 本機與 repo 完全一致\n'));
+    return;
   }
+
+  // 一致的
+  for (const name of inBoth) {
+    console.log(`  ${col.dim('✅')}  ${col.dim(name)}`);
+  }
+
+  // repo 有、本機沒裝
+  for (const name of onlyInRepo) {
+    console.log(`  ${col.yellow('⬇️ ')}  ${name}  ${col.yellow('← repo 有、本機未安裝')}`);
+  }
+
+  // 本機有、repo 沒記錄
+  for (const name of onlyInLocal) {
+    console.log(`  ${col.cyan('⬆️ ')}  ${name}  ${col.cyan('← 本機有、repo 未記錄')}`);
+  }
+
+  // 建議指令
+  if (onlyInRepo.length > 0) {
+    console.log(col.bold('\n── 安裝缺少的 skills ─────────────────────────────'));
+    for (const name of onlyInRepo) {
+      const { source } = repoSkills[name];
+      console.log(`  npx skills add ${source} -g -y --skill ${name} --agent claude-code`);
+    }
+  }
+
+  if (onlyInLocal.length > 0) {
+    console.log(col.bold('\n── 本機多裝的 skills（自行決定是否移除）──────────'));
+    for (const name of onlyInLocal) {
+      console.log(`  npx skills remove ${name} -g -y`);
+    }
+  }
+
+  console.log('');
 }
 
 // ── diff mode ──────────────────────────────────────────────────────────────
@@ -378,6 +393,11 @@ async function main() {
     return;
   }
 
+  if (mode === 'skills:diff') {
+    runSkillsDiff();
+    return;
+  }
+
   // ── to-repo ──
   if (mode === 'to-repo') {
     console.log(col.bold('\n🔄 sync-ai 本機 → repo\n'));
@@ -406,8 +426,6 @@ async function main() {
       ['sync-ai*'],
       true,
     )) changes.push(`claude/commands/${f}`);
-
-    for (const f of syncSkills('to-repo')) changes.push(f);
 
     // git diff
     const gitStatus = run('git status --short');
@@ -445,9 +463,22 @@ async function main() {
   );
   if (claudeStatus) preview.push({ label: '~/.claude/CLAUDE.md', status: claudeStatus });
 
-  // settings.json 永遠會 merge，只要 repo 有就列入
-  if (fs.existsSync(path.join(REPO_ROOT, 'claude', 'settings.json')))
-    preview.push({ label: '~/.claude/settings.json', status: 'changed' });
+  // settings.json：比較去掉裝置欄位後的內容
+  {
+    const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
+    const localPath = path.join(CLAUDE_HOME, 'settings.json');
+    if (fs.existsSync(repoPath)) {
+      const repo = JSON.parse(fs.readFileSync(repoPath, 'utf8'));
+      const local = fs.existsSync(localPath)
+        ? JSON.parse(fs.readFileSync(localPath, 'utf8'))
+        : {};
+      for (const field of DEVICE_FIELDS) delete local[field];
+      const repoStr = JSON.stringify(repo, null, 2);
+      const localStr = JSON.stringify(local, null, 2);
+      if (repoStr !== localStr)
+        preview.push({ label: '~/.claude/settings.json', status: localPath && fs.existsSync(localPath) ? 'changed' : 'new' });
+    }
+  }
 
   const statuslineStatus = diffFile(
     path.join(REPO_ROOT, 'claude', 'statusline.sh'),
@@ -507,8 +538,6 @@ async function main() {
     path.join(REPO_ROOT, 'claude', 'commands'),
     path.join(CLAUDE_HOME, 'commands'),
   )) changes.push(`~/.claude/commands/${f}`);
-
-  for (const f of syncSkills('to-local')) changes.push(f);
 
   console.log('📋 同步完成：\n');
   if (changes.length === 0) {
