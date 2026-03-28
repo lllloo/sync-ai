@@ -478,7 +478,7 @@ async function main() {
       const repoStr = JSON.stringify(repo, null, 2);
       const localStr = JSON.stringify(local, null, 2);
       if (repoStr !== localStr)
-        preview.push({ label: '~/.claude/settings.json', status: localPath && fs.existsSync(localPath) ? 'changed' : 'new' });
+        preview.push({ label: '~/.claude/settings.json', status: fs.existsSync(localPath) ? 'changed' : 'new' });
     }
   }
 
@@ -522,23 +522,27 @@ async function main() {
   // 套用
   const changes = [];
 
-  if (copyFile(path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), path.join(CLAUDE_HOME, 'CLAUDE.md')))
+  if (copyFile(path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), path.join(CLAUDE_HOME, 'CLAUDE.md'), true))
     changes.push('~/.claude/CLAUDE.md');
 
   if (mergeSettingsJson('to-local'))
     changes.push('~/.claude/settings.json');
 
-  if (copyFile(path.join(REPO_ROOT, 'claude', 'statusline.sh'), path.join(CLAUDE_HOME, 'statusline.sh')))
+  if (copyFile(path.join(REPO_ROOT, 'claude', 'statusline.sh'), path.join(CLAUDE_HOME, 'statusline.sh'), true))
     changes.push('~/.claude/statusline.sh');
 
   for (const f of mirrorDir(
     path.join(REPO_ROOT, 'claude', 'agents'),
     path.join(CLAUDE_HOME, 'agents'),
+    [],
+    true,
   )) changes.push(`~/.claude/agents/${f}`);
 
   for (const f of mirrorDir(
     path.join(REPO_ROOT, 'claude', 'commands'),
     path.join(CLAUDE_HOME, 'commands'),
+    [],
+    true,
   )) changes.push(`~/.claude/commands/${f}`);
 
   console.log('📋 同步完成：\n');
