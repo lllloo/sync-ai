@@ -34,6 +34,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `claude/commands/` | 同步的全域 commands，對應 `~/.claude/commands/` |
 | `skills-lock.json` | 各裝置已安裝的 skills 參考清單（僅供查閱，不自動同步） |
 
+## 修改守則
+
+- 修改程式碼或設定時，須判斷 `README.md` 是否需要同步更新（例如新增/移除指令、改變同步項目、調整行為等）
+
 ## 注意事項
 
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo

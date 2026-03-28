@@ -2,16 +2,22 @@
 
 跨裝置同步 Claude Code 設定的私有 Git repo 工具。
 
-**同步項目**：`~/.claude/CLAUDE.md`、`~/.claude/settings.json`、`~/.claude/statusline.sh`、全域 skills、全域 agents、全域 commands
+**同步項目**：`~/.claude/CLAUDE.md`、`~/.claude/settings.json`、`~/.claude/statusline.sh`、全域 agents、全域 commands
 
 ## 使用方式
 
 ```bash
+# 比較本機 vs repo 差異（不寫任何東西）
+npm run diff
+
 # 本機設定 → repo（上傳）
 npm run to-repo
 
 # repo 設定 → 本機（套用）
 npm run to-local
+
+# 比較本機 vs repo 的 skills 差異（不自動同步，僅列出建議指令）
+npm run skills:diff
 ```
 
 ## 新裝置部署
@@ -40,4 +46,4 @@ npm run to-local
 - `settings.json` 的 `model`、`effortLevel` 為裝置特定設定，to-repo 時自動排除，to-local 時保留本機值
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
 - agents 儲存於 `claude/agents/`，以 package 子目錄分組
-- to-repo 時依 `~/.agents/.skill-lock.json` 更新 `skills-lock.json`；to-local 時自動安裝缺少的 skills
+- Skills 不在自動同步範圍內，用 `npm run skills:diff` 查看差異，再自行執行建議的 `npx skills` 指令
