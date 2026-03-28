@@ -264,6 +264,11 @@ function runSkillsDiff() {
 function runDiff() {
   console.log(col.bold('\n📊 本機 vs repo 差異比對\n'));
 
+  // 追蹤臨時檔案，確保事後清理
+  let tmpSrc = null;
+
+  try {
+
   // 收集所有要比較的項目
   // [{ label, status, srcPath, destPath }]
   const items = [];
@@ -280,7 +285,6 @@ function runDiff() {
     const localPath = path.join(CLAUDE_HOME, 'settings.json');
     const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
     let status = null;
-    let tmpSrc = null;
     if (fs.existsSync(localPath)) {
       const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
       for (const field of DEVICE_FIELDS) delete local[field];
@@ -370,6 +374,12 @@ function runDiff() {
   console.log(col.bold('\n💡 下一步：'));
   console.log(`   npm run to-repo   ${col.dim('# 將本機內容寫入 repo，再用 git diff 確認')}`);
   console.log('');
+
+  } finally {
+    if (tmpSrc) {
+      try { fs.unlinkSync(tmpSrc); } catch (_) {}
+    }
+  }
 }
 
 // ── 互動確認 ───────────────────────────────────────────────────────────────
@@ -402,6 +412,70 @@ async function main() {
   if (mode === 'to-repo') {
     console.log(col.bold('\n🔄 sync-ai 本機 → repo\n'));
 
+    // 預覽：收集差異，讓使用者確認後再執行
+    const preview = [];
+
+    const claudeStatus = diffFile(
+      path.join(CLAUDE_HOME, 'CLAUDE.md'),
+      path.join(REPO_ROOT, 'claude', 'CLAUDE.md'),
+    );
+    if (claudeStatus) preview.push({ label: 'claude/CLAUDE.md', status: claudeStatus });
+
+    {
+      const localPath = path.join(CLAUDE_HOME, 'settings.json');
+      const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
+      if (fs.existsSync(localPath)) {
+        const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+        for (const field of DEVICE_FIELDS) delete local[field];
+        const stripped = JSON.stringify(local, null, 2) + '\n';
+        if (!fs.existsSync(dest)) {
+          preview.push({ label: 'claude/settings.json', status: 'new' });
+        } else if (fs.readFileSync(dest, 'utf8') !== stripped) {
+          preview.push({ label: 'claude/settings.json', status: 'changed' });
+        }
+      }
+    }
+
+    const statuslineStatus = diffFile(
+      path.join(CLAUDE_HOME, 'statusline.sh'),
+      path.join(REPO_ROOT, 'claude', 'statusline.sh'),
+    );
+    if (statuslineStatus) preview.push({ label: 'claude/statusline.sh', status: statuslineStatus });
+
+    for (const d of diffDir(
+      path.join(CLAUDE_HOME, 'agents'),
+      path.join(REPO_ROOT, 'claude', 'agents'),
+    )) preview.push({ label: `claude/agents/${d.rel}`, status: d.status });
+
+    for (const d of diffDir(
+      path.join(CLAUDE_HOME, 'commands'),
+      path.join(REPO_ROOT, 'claude', 'commands'),
+      ['sync-ai*'],
+    )) preview.push({ label: `claude/commands/${d.rel}`, status: d.status });
+
+    if (preview.length === 0) {
+      console.log(col.green('  ✅ 與 repo 完全一致，無需同步\n'));
+      return;
+    }
+
+    console.log('📋 預覽（尚未寫入 repo）：\n');
+    for (const p of preview) {
+      const icon =
+        p.status === 'new'     ? col.green('➕') :
+        p.status === 'deleted' ? col.red('➖')   :
+                                 col.yellow('✏️ ');
+      console.log(`  ${icon}  ${p.label}`);
+    }
+
+    console.log('');
+    const confirmed = await askConfirm(col.bold('將以上變更寫入 repo？(y/N) '));
+    if (!confirmed) {
+      console.log('\n  已取消\n');
+      return;
+    }
+    console.log('');
+
+    // 執行同步
     const changes = [];
 
     if (copyFile(path.join(CLAUDE_HOME, 'CLAUDE.md'), path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), true))
@@ -429,13 +503,15 @@ async function main() {
 
     // git diff
     const gitStatus = run('git status --short');
-    if (gitStatus.stdout.trim()) {
+    if (gitStatus.error || gitStatus.status !== 0) {
+      console.log(col.yellow('  ⚠️ 無法取得 git 狀態'));
+    } else if (gitStatus.stdout.trim()) {
       console.log(col.bold('📋 Git 變動：\n'));
       for (const line of gitStatus.stdout.trim().split('\n')) {
         console.log('  ' + col.yellow(line));
       }
       const gitDiff = run('git diff --stat');
-      if (gitDiff.stdout.trim()) {
+      if (!gitDiff.error && gitDiff.stdout.trim()) {
         console.log('');
         for (const line of gitDiff.stdout.trim().split('\n')) {
           console.log('  ' + col.dim(line));
