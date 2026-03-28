@@ -32,8 +32,18 @@ if (!['to-repo', 'to-local', 'diff', 'skills:diff'].includes(mode)) {
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
-function run(cmd) {
-  return spawnSync(cmd, { shell: true, cwd: REPO_ROOT, encoding: 'utf8' });
+function run(cmd, args = []) {
+  return spawnSync(cmd, args, { cwd: REPO_ROOT, encoding: 'utf8' });
+}
+
+function readJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.error(col.red(`  ✖ 無法解析 JSON：${filePath}`));
+    console.error(col.dim(`    ${e.message}`));
+    process.exit(1);
+  }
 }
 
 function ensureDir(dir) {
@@ -180,17 +190,17 @@ function mergeSettingsJson(m) {
 
   if (m === 'to-repo') {
     if (!fs.existsSync(localPath)) return false;
-    const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+    const local = readJson(localPath);
     for (const field of DEVICE_FIELDS) delete local[field];
     ensureDir(path.dirname(repoPath));
     fs.writeFileSync(repoPath, JSON.stringify(local, null, 2) + '\n');
     return true;
   } else {
     if (!fs.existsSync(repoPath)) return false;
-    const repo = JSON.parse(fs.readFileSync(repoPath, 'utf8'));
+    const repo = readJson(repoPath);
     const deviceValues = {};
     if (fs.existsSync(localPath)) {
-      const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      const local = readJson(localPath);
       for (const field of DEVICE_FIELDS) {
         if (local[field] !== undefined) deviceValues[field] = local[field];
       }
@@ -210,10 +220,10 @@ function runSkillsDiff() {
   const localLockPath = path.join(AGENTS_HOME, '.skill-lock.json');
 
   const repoSkills = fs.existsSync(repoLockPath)
-    ? JSON.parse(fs.readFileSync(repoLockPath, 'utf8')).skills || {}
+    ? readJson(repoLockPath).skills || {}
     : {};
   const localSkills = fs.existsSync(localLockPath)
-    ? JSON.parse(fs.readFileSync(localLockPath, 'utf8')).skills || {}
+    ? readJson(localLockPath).skills || {}
     : {};
 
   const onlyInRepo  = Object.keys(repoSkills).filter(n => !localSkills[n]);
@@ -286,10 +296,10 @@ function runDiff() {
     const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
     let status = null;
     if (fs.existsSync(localPath)) {
-      const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      const local = readJson(localPath);
       for (const field of DEVICE_FIELDS) delete local[field];
       const stripped = JSON.stringify(local, null, 2) + '\n';
-      tmpSrc = path.join(os.tmpdir(), 'sync-ai-settings-diff.json');
+      tmpSrc = path.join(os.tmpdir(), `sync-ai-settings-diff-${process.pid}.json`);
       fs.writeFileSync(tmpSrc, stripped);
       if (!fs.existsSync(dest)) {
         status = 'new';
@@ -317,7 +327,6 @@ function runDiff() {
   const commandDiffs = diffDir(
     path.join(CLAUDE_HOME, 'commands'),
     path.join(REPO_ROOT, 'claude', 'commands'),
-    ['sync-ai*'],
   );
 
   const allDiffItems = [
@@ -425,7 +434,7 @@ async function main() {
       const localPath = path.join(CLAUDE_HOME, 'settings.json');
       const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
       if (fs.existsSync(localPath)) {
-        const local = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+        const local = readJson(localPath);
         for (const field of DEVICE_FIELDS) delete local[field];
         const stripped = JSON.stringify(local, null, 2) + '\n';
         if (!fs.existsSync(dest)) {
@@ -450,7 +459,6 @@ async function main() {
     for (const d of diffDir(
       path.join(CLAUDE_HOME, 'commands'),
       path.join(REPO_ROOT, 'claude', 'commands'),
-      ['sync-ai*'],
     )) preview.push({ label: `claude/commands/${d.rel}`, status: d.status });
 
     if (preview.length === 0) {
@@ -497,12 +505,12 @@ async function main() {
     for (const f of mirrorDir(
       path.join(CLAUDE_HOME, 'commands'),
       path.join(REPO_ROOT, 'claude', 'commands'),
-      ['sync-ai*'],
+      [],
       true,
     )) changes.push(`claude/commands/${f}`);
 
     // git diff
-    const gitStatus = run('git status --short');
+    const gitStatus = run('git', ['status', '--short']);
     if (gitStatus.error || gitStatus.status !== 0) {
       console.log(col.yellow('  ⚠️ 無法取得 git 狀態'));
     } else if (gitStatus.stdout.trim()) {
@@ -510,7 +518,7 @@ async function main() {
       for (const line of gitStatus.stdout.trim().split('\n')) {
         console.log('  ' + col.yellow(line));
       }
-      const gitDiff = run('git diff --stat');
+      const gitDiff = run('git', ['diff', '--stat']);
       if (!gitDiff.error && gitDiff.stdout.trim()) {
         console.log('');
         for (const line of gitDiff.stdout.trim().split('\n')) {
@@ -544,9 +552,9 @@ async function main() {
     const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
     const localPath = path.join(CLAUDE_HOME, 'settings.json');
     if (fs.existsSync(repoPath)) {
-      const repo = JSON.parse(fs.readFileSync(repoPath, 'utf8'));
+      const repo = readJson(repoPath);
       const local = fs.existsSync(localPath)
-        ? JSON.parse(fs.readFileSync(localPath, 'utf8'))
+        ? readJson(localPath)
         : {};
       for (const field of DEVICE_FIELDS) delete local[field];
       const repoStr = JSON.stringify(repo, null, 2);

@@ -38,6 +38,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
 - agents 以檔案形式直接儲存於 `claude/agents/`，以 package 子目錄分組（如 `claude/agents/awesome-claude-code-subagents/`）
-- to-repo 時 `~/.claude/commands/sync-ai*` 系列檔案不會複製進 repo
 - `.DS_Store` 檔案自動排除，不會同步進 repo
 - Skills（`~/.agents/`）不在自動同步範圍內，用 `npm run skills:diff` 查看差異，再自行執行建議的 `npx skills` 指令
