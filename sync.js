@@ -421,95 +421,13 @@ async function main() {
   if (mode === 'to-repo') {
     console.log(col.bold('\n🔄 sync-ai 本機 → repo\n'));
 
-    // 預覽：收集差異，讓使用者確認後再執行
-    const preview = [];
+    copyFile(path.join(CLAUDE_HOME, 'CLAUDE.md'), path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), true);
+    mergeSettingsJson('to-repo');
+    copyFile(path.join(CLAUDE_HOME, 'statusline.sh'), path.join(REPO_ROOT, 'claude', 'statusline.sh'), true);
+    mirrorDir(path.join(CLAUDE_HOME, 'agents'), path.join(REPO_ROOT, 'claude', 'agents'), [], true);
+    mirrorDir(path.join(CLAUDE_HOME, 'commands'), path.join(REPO_ROOT, 'claude', 'commands'), [], true);
 
-    const claudeStatus = diffFile(
-      path.join(CLAUDE_HOME, 'CLAUDE.md'),
-      path.join(REPO_ROOT, 'claude', 'CLAUDE.md'),
-    );
-    if (claudeStatus) preview.push({ label: 'claude/CLAUDE.md', status: claudeStatus });
-
-    {
-      const localPath = path.join(CLAUDE_HOME, 'settings.json');
-      const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
-      if (fs.existsSync(localPath)) {
-        const local = readJson(localPath);
-        for (const field of DEVICE_FIELDS) delete local[field];
-        const stripped = JSON.stringify(local, null, 2) + '\n';
-        if (!fs.existsSync(dest)) {
-          preview.push({ label: 'claude/settings.json', status: 'new' });
-        } else if (fs.readFileSync(dest, 'utf8') !== stripped) {
-          preview.push({ label: 'claude/settings.json', status: 'changed' });
-        }
-      }
-    }
-
-    const statuslineStatus = diffFile(
-      path.join(CLAUDE_HOME, 'statusline.sh'),
-      path.join(REPO_ROOT, 'claude', 'statusline.sh'),
-    );
-    if (statuslineStatus) preview.push({ label: 'claude/statusline.sh', status: statuslineStatus });
-
-    for (const d of diffDir(
-      path.join(CLAUDE_HOME, 'agents'),
-      path.join(REPO_ROOT, 'claude', 'agents'),
-    )) preview.push({ label: `claude/agents/${d.rel}`, status: d.status });
-
-    for (const d of diffDir(
-      path.join(CLAUDE_HOME, 'commands'),
-      path.join(REPO_ROOT, 'claude', 'commands'),
-    )) preview.push({ label: `claude/commands/${d.rel}`, status: d.status });
-
-    if (preview.length === 0) {
-      console.log(col.green('  ✅ 與 repo 完全一致，無需同步\n'));
-      return;
-    }
-
-    console.log('📋 預覽（尚未寫入 repo）：\n');
-    for (const p of preview) {
-      const icon =
-        p.status === 'new'     ? col.green('➕') :
-        p.status === 'deleted' ? col.red('➖')   :
-                                 col.yellow('✏️ ');
-      console.log(`  ${icon}  ${p.label}`);
-    }
-
-    console.log('');
-    const confirmed = await askConfirm(col.bold('將以上變更寫入 repo？(y/N) '));
-    if (!confirmed) {
-      console.log('\n  已取消\n');
-      return;
-    }
-    console.log('');
-
-    // 執行同步
-    const changes = [];
-
-    if (copyFile(path.join(CLAUDE_HOME, 'CLAUDE.md'), path.join(REPO_ROOT, 'claude', 'CLAUDE.md'), true))
-      changes.push('claude/CLAUDE.md');
-
-    if (mergeSettingsJson('to-repo'))
-      changes.push('claude/settings.json');
-
-    if (copyFile(path.join(CLAUDE_HOME, 'statusline.sh'), path.join(REPO_ROOT, 'claude', 'statusline.sh'), true))
-      changes.push('claude/statusline.sh');
-
-    for (const f of mirrorDir(
-      path.join(CLAUDE_HOME, 'agents'),
-      path.join(REPO_ROOT, 'claude', 'agents'),
-      [],
-      true,
-    )) changes.push(`claude/agents/${f}`);
-
-    for (const f of mirrorDir(
-      path.join(CLAUDE_HOME, 'commands'),
-      path.join(REPO_ROOT, 'claude', 'commands'),
-      [],
-      true,
-    )) changes.push(`claude/commands/${f}`);
-
-    // git diff
+    // 顯示 git status 讓使用者自行判斷
     const gitStatus = run('git', ['status', '--short']);
     if (gitStatus.error || gitStatus.status !== 0) {
       console.log(col.yellow('  ⚠️ 無法取得 git 狀態'));
