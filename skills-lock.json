@@ -5,10 +5,6 @@
       "source": "vuejs-ai/skills",
       "sourceType": "github"
     },
-    "create-adaptable-composable": {
-      "source": "vuejs-ai/skills",
-      "sourceType": "github"
-    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github"
