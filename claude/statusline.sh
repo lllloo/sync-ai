@@ -24,8 +24,8 @@ WEEK_PCT="" WEEK_RESETS=""
     WEEK_RESETS="${BASH_REMATCH[2]}"
 }
 
-# Current epoch
-NOW_EPOCH=$(date +%s)
+# Current epoch via bash built-in (no subprocess)
+printf -v NOW_EPOCH '%(%s)T' -1
 
 # Format countdown — store result in _CD to avoid $() subshell
 _CD=""
