@@ -12,6 +12,10 @@
     "skill-creator": {
       "source": "anthropics/skills",
       "sourceType": "github"
+    },
+    "gan-style-harness": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github"
     }
   }
 }

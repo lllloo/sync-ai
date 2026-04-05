@@ -5,6 +5,7 @@
   "scripts": {
     "diff": "node sync.js diff",
     "skills:diff": "node sync.js skills:diff",
+    "skills:add": "node sync.js skills:add",
     "to-repo": "node sync.js to-repo",
     "to-local": "node sync.js to-local"
   },

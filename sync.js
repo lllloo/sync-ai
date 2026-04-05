@@ -25,8 +25,8 @@ const col = {
 };
 
 const mode = process.argv[2];
-if (!['to-repo', 'to-local', 'diff', 'skills:diff'].includes(mode)) {
-  console.error('用法: node sync.js to-repo|to-local|diff|skills:diff');
+if (!['to-repo', 'to-local', 'diff', 'skills:diff', 'skills:add'].includes(mode)) {
+  console.error('用法: node sync.js to-repo|to-local|diff|skills:diff|skills:add');
   process.exit(1);
 }
 
@@ -269,6 +269,64 @@ function runSkillsDiff() {
   console.log('');
 }
 
+// ── skills:add mode ────────────────────────────────────────────────────────
+
+function runSkillsAdd() {
+  // 用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>
+  // 用法 2：node sync.js skills:add <name> <source>
+  const arg1 = process.argv[3];
+  const arg2 = process.argv[4];
+
+  let name, source;
+
+  if (!arg1) {
+    console.error(col.red('  ✖ 請提供 skill 來源'));
+    console.error(col.dim('  用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>'));
+    console.error(col.dim('  用法 2：node sync.js skills:add <name> <source>'));
+    process.exit(1);
+  }
+
+  if (arg1.startsWith('https://skills.sh/')) {
+    // 解析 skills.sh URL：https://skills.sh/<org>/<repo>/<skill-name>
+    const parts = arg1.replace('https://skills.sh/', '').split('/');
+    if (parts.length < 3) {
+      console.error(col.red('  ✖ 無法解析 skills.sh URL，格式應為 https://skills.sh/<org>/<repo>/<skill>'));
+      process.exit(1);
+    }
+    source = `${parts[0]}/${parts[1]}`;
+    name = parts[2];
+  } else if (arg1 && arg2) {
+    name = arg1;
+    source = arg2;
+  } else {
+    console.error(col.red('  ✖ 參數不足'));
+    console.error(col.dim('  用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>'));
+    console.error(col.dim('  用法 2：node sync.js skills:add <name> <source>'));
+    process.exit(1);
+  }
+
+  const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
+  const lock = fs.existsSync(repoLockPath)
+    ? readJson(repoLockPath)
+    : { version: 1, skills: {} };
+
+  if (!lock.skills) lock.skills = {};
+
+  if (lock.skills[name]) {
+    console.log(col.yellow(`\n  ⚠️  ${name} 已存在於 skills-lock.json（source: ${lock.skills[name].source}）`));
+    console.log(col.dim('  若要更新來源，請手動編輯 skills-lock.json\n'));
+    process.exit(0);
+  }
+
+  lock.skills[name] = { source, sourceType: 'github' };
+  fs.writeFileSync(repoLockPath, JSON.stringify(lock, null, 2) + '\n');
+
+  console.log(col.bold(`\n  ✅ 已加入 ${col.cyan(name)}`));
+  console.log(col.dim(`     source: ${source}\n`));
+  console.log(col.bold('  安裝指令：'));
+  console.log(`  npx skills add ${source} -g -y --skill ${name} --agent claude-code\n`);
+}
+
 // ── diff mode ──────────────────────────────────────────────────────────────
 
 function runDiff() {
@@ -414,6 +472,11 @@ async function main() {
 
   if (mode === 'skills:diff') {
     runSkillsDiff();
+    return;
+  }
+
+  if (mode === 'skills:add') {
+    runSkillsAdd();
     return;
   }
 
