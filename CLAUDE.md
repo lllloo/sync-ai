@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 此 repo 是 Claude Code 跨裝置設定同步工具，透過私有 Git repo 讓多台裝置的 Claude Code 設定保持一致。
 
+## 執行環境
+
+- **OS**：Windows 11（主力）/ macOS（次要）— 跨平台設計
+- **Node.js**：>= 18（LTS），零外部相依，禁止新增 npm 套件
+- **工具**：`node`、`npm`、`git` — 無 Python/pip 環境，不依賴
+
 ## 常用指令
 
 **同步：**
@@ -45,14 +51,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Exit code 語義**：`EXIT_OK=0`（成功或 diff 無差異）、`EXIT_DIFF=1`（diff 有差異，可用於 CI）、`EXIT_ERROR=2`
 - **Relative path 遮罩**：`toRelativePath` 處理 REPO_ROOT 與 `$HOME` → `~/`，`printFileDiff` 的 diff header 亦走此函式避免洩漏使用者名稱
 
-**測試策略**：`test/sync.test.js` 只測純函式（`computeLineDiff`、`matchExclude`、`statusToStatsKey`、`parseSkillSource`、`parseArgs`、`toRelativePath`、`COMMANDS` 完整性）。有 IO 的路徑靠 smoke test 人工驗證。若改純函式，**必須**同步更新 unit test。
+**測試策略**：`test/sync.test.js` 只測純函式（`computeLineDiff`、`matchExclude`、`statusToStatsKey`、`parseSkillSource`、`parseArgs`、`toRelativePath`、`COMMANDS` 完整性）。有 IO 的路徑靠 smoke test 人工驗證。若改純函式，**必須**同步更新 unit test，維持全數通過（視同 100% 覆蓋）。
 
 ## 修改守則
 
 - **README.md 須同步更新**：新增/移除指令、改變同步項目、調整行為、新增旗標時必跟。
 - **函式行數守則**：新增或重構後若某函式 > 60 行，需拆分（`buildSyncItems` 54 行為宣告式陣列，例外）。
+- **禁止新增外部相依**：所有功能必須使用 Node.js 內建模組，不得 `npm install` 任何套件。
 - **settings.json 裝置特定欄位**（`model`、`effortLevel`）若要增減，需同步改 `DEVICE_FIELDS` 常數與 README 注意事項。
 - **Bash 規則**（來自全域 CLAUDE.md）：禁用 `$()` 命令替換；禁擅自執行 `npm run build`。
+- **嚴禁洩漏敏感資訊**：輸出、log、diff 內容中不得出現 API Key、token 或完整使用者路徑。
 
 ## 注意事項
 
