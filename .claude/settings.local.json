@@ -3,5 +3,9 @@
     "allow": [
       "Bash(node *)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
   }
 }
