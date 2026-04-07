@@ -35,6 +35,16 @@ const DEVICE_FIELDS = ['model', 'effortLevel'];
 /** 永遠排除的檔案名稱 */
 const GLOBAL_EXCLUDE = ['.DS_Store'];
 
+/**
+ * LCS DP 行數上限：超過此行數改用近似 diff 以避免 O(mn) 記憶體爆炸
+ * （m + n 為兩檔案總行數，2000 大致對應 ~4MB DP 表）
+ */
+const LCS_MAX_LINES = 2000;
+
+/** help 指令排版用欄寬 */
+const CMD_COL_WIDTH = 14;
+const ALIAS_COL_WIDTH = 8;
+
 /** 統一的狀態圖示映射表，確保語義一致與對齊 */
 const STATUS_ICONS = {
   ok:      { icon: '\u2713', color: 'dim'    },  // 一致
@@ -569,7 +579,7 @@ function computeLineDiff(oldText, newText) {
   const n = newLines.length;
 
   // 對於小檔案用完整 LCS，大檔案用簡易逐行比對
-  if (m + n > 2000) {
+  if (m + n > LCS_MAX_LINES) {
     return computeSimpleLineDiff(oldLines, newLines);
   }
 
@@ -925,6 +935,51 @@ function buildSyncItems(direction) {
 }
 
 /**
+ * 將 diff status 對應到 stats 欄位 key
+ * @param {string|null} status
+ * @returns {'added'|'updated'|'deleted'|null}
+ */
+function statusToStatsKey(status) {
+  if (status === 'new') return 'added';
+  if (status === 'changed') return 'updated';
+  if (status === 'deleted') return 'deleted';
+  return null;
+}
+
+/**
+ * 為 settings 項目產生 diff result entry
+ * 注意：settings.json 的比對方向固定（local stripped vs repo），不受 direction 參數影響
+ * @param {SyncItem} item
+ * @returns {{label: string, status: string|null, src: string|null, dest: string, verboseSrc: string, verboseDest: string, itemType: string}}
+ */
+function diffSettingsItem(item) {
+  const localPath = path.join(CLAUDE_HOME, 'settings.json');
+  const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
+  let status = null;
+  let tmpSrc = null;
+  if (fs.existsSync(localPath)) {
+    const stripped = getStrippedSettings(localPath);
+    tmpSrc = path.join(os.tmpdir(), `sync-ai-settings-diff-${process.pid}.json`);
+    registerTempFile(tmpSrc);
+    fs.writeFileSync(tmpSrc, stripped);
+    if (!fs.existsSync(repoPath)) {
+      status = 'new';
+    } else if (fs.readFileSync(repoPath, 'utf8') !== stripped) {
+      status = 'changed';
+    }
+  }
+  return {
+    label: `claude/${item.label}`,
+    status,
+    src: tmpSrc,
+    dest: repoPath,
+    verboseSrc: localPath,
+    verboseDest: repoPath,
+    itemType: 'settings',
+  };
+}
+
+/**
  * 對同步項目執行 diff，回傳差異清單
  * @param {SyncItem[]} items - 同步項目清單
  * @param {'to-repo'|'to-local'} direction - 同步方向
@@ -935,31 +990,7 @@ function diffSyncItems(items, direction) {
 
   for (const item of items) {
     if (item.type === 'settings') {
-      // 注意：settings.json 的比對方向固定（local stripped vs repo），不受 direction 參數影響
-      const localPath = path.join(CLAUDE_HOME, 'settings.json');
-      const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
-      let status = null;
-      let tmpSrc = null;
-      if (fs.existsSync(localPath)) {
-        const stripped = getStrippedSettings(localPath);
-        tmpSrc = path.join(os.tmpdir(), `sync-ai-settings-diff-${process.pid}.json`);
-        registerTempFile(tmpSrc);
-        fs.writeFileSync(tmpSrc, stripped);
-        if (!fs.existsSync(repoPath)) {
-          status = 'new';
-        } else if (fs.readFileSync(repoPath, 'utf8') !== stripped) {
-          status = 'changed';
-        }
-      }
-      result.push({
-        label: `claude/${item.label}`,
-        status,
-        src: tmpSrc,
-        dest: repoPath,
-        verboseSrc: localPath,
-        verboseDest: repoPath,
-        itemType: 'settings',
-      });
+      result.push(diffSettingsItem(item));
     } else if (item.type === 'file') {
       const status = diffFile(item.src, item.dest);
       result.push({
@@ -1094,17 +1125,21 @@ function logVerbosePaths(src, dest) {
 
 /**
  * 補全無差異項目並排序：file/settings 在前，dir 在後
+ * 純函式：不修改傳入的 diffItems 陣列
  * @param {SyncItem[]} items - 原始同步項目清單
  * @param {Array<{label: string, status: string|null, itemType: string}>} diffItems - diff 結果
- * @returns {typeof diffItems} 補全並排序後的清單
+ * @returns {typeof diffItems} 補全並排序後的新清單
  */
 function buildFullDiffList(items, diffItems) {
+  // 複製陣列，避免 mutating 呼叫端傳入的物件
+  const result = [...diffItems];
+
   // 補上無差異的 file 與 settings 項目（ok 狀態）
   for (const item of items) {
     if (item.type === 'dir') continue;
     const label = `claude/${item.label}`;
-    if (!diffItems.some(d => d.label === label)) {
-      diffItems.push({
+    if (!result.some(d => d.label === label)) {
+      result.push({
         label,
         status: null,
         src: item.src,
@@ -1117,14 +1152,14 @@ function buildFullDiffList(items, diffItems) {
   }
 
   // 排序：使用 itemType 欄位，dir 排在後面
-  diffItems.sort((a, b) => {
+  result.sort((a, b) => {
     const aIsDir = a.itemType === 'dir';
     const bIsDir = b.itemType === 'dir';
     if (aIsDir !== bIsDir) return aIsDir ? 1 : -1;
     return 0;
   });
 
-  return diffItems;
+  return result;
 }
 
 /**
@@ -1240,32 +1275,11 @@ function runToRepo(opts) {
 }
 
 /**
- * to-local 指令：repo 設定同步到本機
- * @param {ParsedArgs} opts - CLI 引數
- * @returns {Promise<number>} exit code
+ * 顯示 to-local 的預覽列表並計算 stats
+ * @param {Array<{label: string, status: string|null}>} diffResults
+ * @returns {{added: number, updated: number, deleted: number}} previewStats
  */
-async function runToLocal(opts) {
-  const { dryRun } = opts;
-
-  if (dryRun) {
-    console.log(col.bold('\n  [dry-run] repo -> 本機（不寫入任何檔案）\n'));
-  } else {
-    console.log(col.bold('\n  repo -> 本機\n'));
-  }
-
-  const items = buildSyncItems('to-local');
-
-  // 用 diffSyncItems 取得差異預覽（不執行寫入）
-  const diffResults = diffSyncItems(items, 'to-local');
-  const hasChanges = diffResults.some(d => d.status !== null);
-
-  if (!hasChanges) {
-    console.log(col.green('  本機與 repo 完全一致，無需套用\n'));
-    return EXIT_OK;
-  }
-
-  // 顯示預覽
-  if (!dryRun) console.log('  預覽（尚未套用）：\n');
+function printToLocalPreview(diffResults) {
   for (const d of diffResults) {
     if (d.status === 'new') printStatusLine('added', d.label, '將新增');
     else if (d.status === 'changed') printStatusLine('changed', d.label, '將更新');
@@ -1274,18 +1288,18 @@ async function runToLocal(opts) {
 
   const previewStats = { added: 0, updated: 0, deleted: 0 };
   for (const d of diffResults) {
-    if (d.status === 'new') previewStats.added++;
-    else if (d.status === 'changed') previewStats.updated++;
-    else if (d.status === 'deleted') previewStats.deleted++;
+    const key = statusToStatsKey(d.status);
+    if (key) previewStats[key]++;
   }
+  return previewStats;
+}
 
-  if (dryRun) {
-    console.log('');
-    printSummary(previewStats);
-    console.log(col.dim('\n  以上為預覽，未實際寫入任何檔案\n'));
-    return EXIT_OK;
-  }
-
+/**
+ * 詢問使用者並實際套用變更（to-local）
+ * @param {SyncItem[]} items
+ * @returns {Promise<number>} exit code
+ */
+async function confirmAndApply(items) {
   console.log('');
   const confirmed = await askConfirm(col.bold('  套用以上變更？(y/N) '));
   if (!confirmed) {
@@ -1294,7 +1308,6 @@ async function runToLocal(opts) {
   }
   console.log('');
 
-  // 實際套用（只呼叫一次 applySyncItems）
   isWriting = true;
   try {
     const { stats, changeLog } = applySyncItems(items, 'to-local', { dryRun: false });
@@ -1313,6 +1326,41 @@ async function runToLocal(opts) {
 
   console.log('');
   return EXIT_OK;
+}
+
+/**
+ * to-local 指令：repo 設定同步到本機
+ * @param {ParsedArgs} opts - CLI 引數
+ * @returns {Promise<number>} exit code
+ */
+async function runToLocal(opts) {
+  const { dryRun } = opts;
+
+  if (dryRun) {
+    console.log(col.bold('\n  [dry-run] repo -> 本機（不寫入任何檔案）\n'));
+  } else {
+    console.log(col.bold('\n  repo -> 本機\n'));
+  }
+
+  const items = buildSyncItems('to-local');
+  const diffResults = diffSyncItems(items, 'to-local');
+
+  if (!diffResults.some(d => d.status !== null)) {
+    console.log(col.green('  本機與 repo 完全一致，無需套用\n'));
+    return EXIT_OK;
+  }
+
+  if (!dryRun) console.log('  預覽（尚未套用）：\n');
+  const previewStats = printToLocalPreview(diffResults);
+
+  if (dryRun) {
+    console.log('');
+    printSummary(previewStats);
+    console.log(col.dim('\n  以上為預覽，未實際寫入任何檔案\n'));
+    return EXIT_OK;
+  }
+
+  return confirmAndApply(items);
 }
 
 // =============================================================================
@@ -1447,6 +1495,15 @@ function runSkillsAdd(opts) {
 }
 
 /**
+ * 印出版本號（--version 處理）
+ * @returns {void}
+ */
+function printVersion() {
+  const pkg = readPackageJson();
+  console.log(pkg ? pkg.version : 'unknown');
+}
+
+/**
  * help 指令：顯示所有可用指令與說明
  * @returns {void}
  */
@@ -1459,10 +1516,10 @@ function runHelp() {
 
   console.log(col.bold('  指令：'));
   for (const [cmd, def] of Object.entries(COMMANDS)) {
-    const aliasStr = def.alias ? col.dim(`(${def.alias})`) : '';
-    const pad = ' '.repeat(Math.max(1, 14 - cmd.length));
-    const aliasPad = aliasStr ? ' '.repeat(Math.max(1, 8 - (def.alias || '').length - 2)) : ' '.repeat(8);
-    console.log(`    ${col.cyan(cmd)}${pad}${aliasStr}${aliasPad}${def.desc}`);
+    const aliasRaw = def.alias ? `(${def.alias})` : '';
+    const cmdCol = cmd.padEnd(CMD_COL_WIDTH);
+    const aliasCol = aliasRaw.padEnd(ALIAS_COL_WIDTH);
+    console.log(`    ${col.cyan(cmdCol)}${col.dim(aliasCol)}${def.desc}`);
   }
 
   console.log(col.bold('\n  旗標：'));
@@ -1583,10 +1640,9 @@ function askConfirm(question) {
 async function main() {
   const opts = parseArgs();
 
-  // --version：直接輸出版本號並回傳
+  // --version：透過 printVersion 統一處理（與 runHelp 對稱）
   if (opts.showVersion) {
-    const pkg = readPackageJson();
-    console.log(pkg ? pkg.version : 'unknown');
+    printVersion();
     return EXIT_OK;
   }
 
