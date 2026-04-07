@@ -604,9 +604,10 @@ function computeLineDiff(oldText, newText) {
 
 /**
  * 簡易逐行比對（大檔案用，結果為近似值：Set 會忽略重複行的位置資訊）
+ * 呼叫端應以 isApproximate 欄位提示使用者
  * @param {string[]} oldLines
  * @param {string[]} newLines
- * @returns {Array<{type: '+'|'-'|' ', line: string}>}
+ * @returns {Array<{type: '+'|'-'|' ', line: string, isApproximate?: boolean}>}
  */
 function computeSimpleLineDiff(oldLines, newLines) {
   const result = [];
@@ -624,6 +625,8 @@ function computeSimpleLineDiff(oldLines, newLines) {
       result.push({ type: '+', line });
     }
   }
+  // 標記為近似結果
+  if (result.length > 0) result[0].isApproximate = true;
   return result;
 }
 
@@ -678,6 +681,11 @@ function printJsDiff(srcPath, destPath, label) {
   if (changedOps.length === 0) return;
 
   console.log(col.bold(`\n  -- ${label}`));
+
+  // 大檔案 fallback 時提示使用者結果為近似值
+  if (ops.length > 0 && ops[0].isApproximate) {
+    console.log(col.dim('  （大檔案模式：以下為近似差異，重複行的位置可能不精確）'));
+  }
 
   // 只顯示有差異的行與前後各 2 行 context
   let lastPrinted = -1;
@@ -878,6 +886,9 @@ function buildSyncItems(direction) {
       verboseSrc: path.join(src, 'CLAUDE.md'),
       verboseDest: path.join(dest, 'CLAUDE.md'),
     },
+    // 注意：settings.json 的 src/dest 固定為 localPath/repoPath，不隨 direction 調換。
+    // 因為 settings.json 需要特殊的裝置欄位排除邏輯（mergeSettingsJson），
+    // 由 mergeSettingsJson 內部根據 direction 決定資料流向。
     {
       label: 'settings.json',
       src: path.join(localBase, 'settings.json'),
@@ -917,14 +928,14 @@ function buildSyncItems(direction) {
  * 對同步項目執行 diff，回傳差異清單
  * @param {SyncItem[]} items - 同步項目清單
  * @param {'to-repo'|'to-local'} direction - 同步方向
- * @returns {Array<{label: string, status: string|null, src: string|null, dest: string, verboseSrc: string, verboseDest: string}>}
+ * @returns {Array<{label: string, status: string|null, src: string|null, dest: string, verboseSrc: string, verboseDest: string, itemType: string}>}
  */
 function diffSyncItems(items, direction) {
   const result = [];
 
   for (const item of items) {
     if (item.type === 'settings') {
-      // settings.json 需要去除裝置欄位後再比較
+      // 注意：settings.json 的比對方向固定（local stripped vs repo），不受 direction 參數影響
       const localPath = path.join(CLAUDE_HOME, 'settings.json');
       const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
       let status = null;
@@ -947,6 +958,7 @@ function diffSyncItems(items, direction) {
         dest: repoPath,
         verboseSrc: localPath,
         verboseDest: repoPath,
+        itemType: 'settings',
       });
     } else if (item.type === 'file') {
       const status = diffFile(item.src, item.dest);
@@ -957,6 +969,7 @@ function diffSyncItems(items, direction) {
         dest: item.dest,
         verboseSrc: item.verboseSrc,
         verboseDest: item.verboseDest,
+        itemType: 'file',
       });
     } else if (item.type === 'dir') {
       const diffs = diffDir(item.src, item.dest);
@@ -970,6 +983,7 @@ function diffSyncItems(items, direction) {
           dest,
           verboseSrc: src,
           verboseDest: dest,
+          itemType: 'dir',
         });
       }
       // 如果目錄無差異，不加入結果（和原 runDiff 行為一致：只有 file 型才顯示 ok）
@@ -1079,6 +1093,60 @@ function logVerbosePaths(src, dest) {
 }
 
 /**
+ * 補全無差異項目並排序：file/settings 在前，dir 在後
+ * @param {SyncItem[]} items - 原始同步項目清單
+ * @param {Array<{label: string, status: string|null, itemType: string}>} diffItems - diff 結果
+ * @returns {typeof diffItems} 補全並排序後的清單
+ */
+function buildFullDiffList(items, diffItems) {
+  // 補上無差異的 file 與 settings 項目（ok 狀態）
+  for (const item of items) {
+    if (item.type === 'dir') continue;
+    const label = `claude/${item.label}`;
+    if (!diffItems.some(d => d.label === label)) {
+      diffItems.push({
+        label,
+        status: null,
+        src: item.src,
+        dest: item.dest,
+        verboseSrc: item.verboseSrc,
+        verboseDest: item.verboseDest,
+        itemType: item.type,
+      });
+    }
+  }
+
+  // 排序：使用 itemType 欄位，dir 排在後面
+  diffItems.sort((a, b) => {
+    const aIsDir = a.itemType === 'dir';
+    const bIsDir = b.itemType === 'dir';
+    if (aIsDir !== bIsDir) return aIsDir ? 1 : -1;
+    return 0;
+  });
+
+  return diffItems;
+}
+
+/**
+ * 輸出詳細的 diff 內容（變更與新增的檔案）
+ * @param {Array<{label: string, status: string|null, src: string|null, dest: string}>} diffItems
+ * @returns {void}
+ */
+function printDetailedDiff(diffItems) {
+  console.log(col.bold('\n  -- 詳細差異 --'));
+  for (const item of diffItems) {
+    if (item.status === 'changed' && item.src && item.dest) {
+      printFileDiff(item.src, item.dest, item.label);
+    } else if (item.status === 'new' && item.src && fs.existsSync(item.src)) {
+      console.log(col.bold(`\n  -- ${item.label}  ${col.green('（新增）')}`));
+      const lines = fs.readFileSync(item.src, 'utf8').split('\n');
+      for (const line of lines.slice(0, 30)) console.log(col.green('  +' + line));
+      if (lines.length > 30) console.log(col.dim(`  ... 共 ${lines.length} 行`));
+    }
+  }
+}
+
+/**
  * diff 指令：比對本機與 repo 的差異
  * @param {ParsedArgs} opts - CLI 引數
  * @returns {number} exit code（EXIT_OK=無差異, EXIT_DIFF=有差異）
@@ -1087,43 +1155,7 @@ function runDiff(opts) {
   console.log(col.bold('\n  本機 vs repo 差異比對\n'));
 
   const items = buildSyncItems('to-repo');
-  const allDiffItems = diffSyncItems(items, 'to-repo');
-
-  // 補上無差異的 file 項目（ok 狀態）
-  const fileItems = items.filter(i => i.type === 'file');
-  for (const fi of fileItems) {
-    const label = `claude/${fi.label}`;
-    if (!allDiffItems.some(d => d.label === label)) {
-      allDiffItems.push({
-        label,
-        status: null,
-        src: fi.src,
-        dest: fi.dest,
-        verboseSrc: fi.verboseSrc,
-        verboseDest: fi.verboseDest,
-      });
-    }
-  }
-  // settings.json 無差異也要顯示 ok
-  if (!allDiffItems.some(d => d.label === 'claude/settings.json')) {
-    const si = items.find(i => i.type === 'settings');
-    allDiffItems.push({
-      label: 'claude/settings.json',
-      status: null,
-      src: si.src,
-      dest: si.dest,
-      verboseSrc: si.verboseSrc,
-      verboseDest: si.verboseDest,
-    });
-  }
-
-  // 排序：file 在前，dir 在後
-  allDiffItems.sort((a, b) => {
-    const aIsDir = a.label.includes('agents/') || a.label.includes('commands/');
-    const bIsDir = b.label.includes('agents/') || b.label.includes('commands/');
-    if (aIsDir !== bIsDir) return aIsDir ? 1 : -1;
-    return 0;
-  });
+  const allDiffItems = buildFullDiffList(items, diffSyncItems(items, 'to-repo'));
 
   let hasDiff = false;
   for (const item of allDiffItems) {
@@ -1149,18 +1181,7 @@ function runDiff(opts) {
     return EXIT_OK;
   }
 
-  // 詳細 diff
-  console.log(col.bold('\n  -- 詳細差異 --'));
-  for (const item of allDiffItems) {
-    if (item.status === 'changed' && item.src && item.dest) {
-      printFileDiff(item.src, item.dest, item.label);
-    } else if (item.status === 'new' && item.src && fs.existsSync(item.src)) {
-      console.log(col.bold(`\n  -- ${item.label}  ${col.green('（新增）')}`));
-      const lines = fs.readFileSync(item.src, 'utf8').split('\n');
-      for (const line of lines.slice(0, 30)) console.log(col.green('  +' + line));
-      if (lines.length > 30) console.log(col.dim(`  ... 共 ${lines.length} 行`));
-    }
-  }
+  printDetailedDiff(allDiffItems);
 
   console.log(col.bold('\n  下一步：'));
   console.log(`   npm run to-repo   ${col.dim('# 將本機內容寫入 repo，再用 git diff 確認')}`);
@@ -1232,21 +1253,35 @@ async function runToLocal(opts) {
     console.log(col.bold('\n  repo -> 本機\n'));
   }
 
-  // 預覽：使用 applySyncItems dry-run 模式取得預覽
   const items = buildSyncItems('to-local');
 
-  // 先用 diff 取得預覽
-  if (!dryRun) console.log('  預覽（尚未套用）：\n');
+  // 用 diffSyncItems 取得差異預覽（不執行寫入）
+  const diffResults = diffSyncItems(items, 'to-local');
+  const hasChanges = diffResults.some(d => d.status !== null);
 
-  // 用 applySyncItems dry-run 來取得預覽
-  const preview = applySyncItems(items, 'to-local', { dryRun: true });
-
-  if (preview.stats.added + preview.stats.updated + preview.stats.deleted === 0) {
+  if (!hasChanges) {
     console.log(col.green('  本機與 repo 完全一致，無需套用\n'));
     return EXIT_OK;
   }
 
+  // 顯示預覽
+  if (!dryRun) console.log('  預覽（尚未套用）：\n');
+  for (const d of diffResults) {
+    if (d.status === 'new') printStatusLine('added', d.label, '將新增');
+    else if (d.status === 'changed') printStatusLine('changed', d.label, '將更新');
+    else if (d.status === 'deleted') printStatusLine('deleted', d.label, '將刪除');
+  }
+
+  const previewStats = { added: 0, updated: 0, deleted: 0 };
+  for (const d of diffResults) {
+    if (d.status === 'new') previewStats.added++;
+    else if (d.status === 'changed') previewStats.updated++;
+    else if (d.status === 'deleted') previewStats.deleted++;
+  }
+
   if (dryRun) {
+    console.log('');
+    printSummary(previewStats);
     console.log(col.dim('\n  以上為預覽，未實際寫入任何檔案\n'));
     return EXIT_OK;
   }
@@ -1259,7 +1294,7 @@ async function runToLocal(opts) {
   }
   console.log('');
 
-  // 實際套用
+  // 實際套用（只呼叫一次 applySyncItems）
   isWriting = true;
   try {
     const { stats, changeLog } = applySyncItems(items, 'to-local', { dryRun: false });
@@ -1342,23 +1377,20 @@ function runSkillsDiff() {
 }
 
 /**
- * skills:add 指令：新增 skill 到 skills-lock.json
+ * 解析 skill 來源引數，回傳 name 與 source
  * @param {ParsedArgs} opts - CLI 引數
- * @returns {number} exit code
+ * @returns {{name: string, source: string}}
+ * @throws {SyncError} 引數不足或格式錯誤時
  */
-function runSkillsAdd(opts) {
+function parseSkillSource(opts) {
   const arg1 = opts.extraArgs[0];
   const arg2 = opts.extraArgs[1];
-
-  let name, source;
+  const usageHint =
+    '  用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>\n' +
+    '  用法 2：node sync.js skills:add <name> <source>';
 
   if (!arg1) {
-    throw new SyncError(
-      '請提供 skill 來源\n' +
-      '  用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>\n' +
-      '  用法 2：node sync.js skills:add <name> <source>',
-      ERR.INVALID_ARGS,
-    );
+    throw new SyncError(`請提供 skill 來源\n${usageHint}`, ERR.INVALID_ARGS);
   }
 
   if (arg1.startsWith('https://skills.sh/')) {
@@ -1370,19 +1402,23 @@ function runSkillsAdd(opts) {
         { url: arg1 },
       );
     }
-    source = `${parts[0]}/${parts[1]}`;
-    name = parts[2];
-  } else if (arg1 && arg2) {
-    name = arg1;
-    source = arg2;
-  } else {
-    throw new SyncError(
-      '參數不足\n' +
-      '  用法 1：node sync.js skills:add https://skills.sh/<org>/<repo>/<skill>\n' +
-      '  用法 2：node sync.js skills:add <name> <source>',
-      ERR.INVALID_ARGS,
-    );
+    return { name: parts[2], source: `${parts[0]}/${parts[1]}` };
   }
+
+  if (arg1 && arg2) {
+    return { name: arg1, source: arg2 };
+  }
+
+  throw new SyncError(`參數不足\n${usageHint}`, ERR.INVALID_ARGS);
+}
+
+/**
+ * skills:add 指令：新增 skill 到 skills-lock.json
+ * @param {ParsedArgs} opts - CLI 引數
+ * @returns {number} exit code
+ */
+function runSkillsAdd(opts) {
+  const { name, source } = parseSkillSource(opts);
 
   const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
   let lock;
@@ -1547,23 +1583,23 @@ function askConfirm(question) {
 async function main() {
   const opts = parseArgs();
 
-  // --version
+  // --version：直接輸出版本號並回傳
   if (opts.showVersion) {
     const pkg = readPackageJson();
     console.log(pkg ? pkg.version : 'unknown');
-    process.exit(EXIT_OK);
+    return EXIT_OK;
   }
 
   // --help 或 help 指令
   if (opts.showHelp || opts.command === 'help') {
     runHelp();
-    process.exit(EXIT_OK);
+    return EXIT_OK;
   }
 
   // 無指令
   if (!opts.command) {
     runHelp();
-    process.exit(EXIT_ERROR);
+    return EXIT_ERROR;
   }
 
   // 無效指令
@@ -1595,11 +1631,13 @@ async function main() {
       break;
   }
 
-  process.exit(exitCode);
+  return exitCode;
 }
 
-// 統一錯誤處理入口
-main().catch(err => {
+// 統一出口：main() 回傳 exit code，由此處統一呼叫 process.exit
+main().then(exitCode => {
+  process.exit(exitCode);
+}).catch(err => {
   formatError(err);
   process.exit(EXIT_ERROR);
 });
