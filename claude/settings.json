@@ -19,7 +19,7 @@
       "Bash(tail:*)",
       "Bash(tr:*)",
       "Bash(wc:*)",
-      "Bash(git *:*)",
+      "Bash(git:*)",
       "Bash(gh api:*)",
       "Bash(gh repo:*)",
       "Bash(node .claude/*)",
