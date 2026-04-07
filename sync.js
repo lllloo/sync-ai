@@ -56,16 +56,17 @@ const STATUS_ICONS = {
 };
 
 /**
- * 指令定義：統一管理指令名稱、別名與說明
- * @type {Record<string, {alias: string|null, desc: string}>}
+ * 指令定義：統一管理指令名稱、別名、說明與 handler
+ * handler 於模組稍後的 attachCommandHandlers() 階段注入（避免 TDZ）
+ * @type {Record<string, {alias: string|null, desc: string, handler: ((opts: ParsedArgs) => number|Promise<number>)|null}>}
  */
 const COMMANDS = {
-  'diff':        { alias: 'd',  desc: '比對本機與 repo 差異' },
-  'to-repo':     { alias: 'tr', desc: '本機設定 -> repo' },
-  'to-local':    { alias: 'tl', desc: 'repo 設定 -> 本機' },
-  'skills:diff': { alias: 'sd', desc: '比對 skills 差異' },
-  'skills:add':  { alias: 'sa', desc: '新增 skill 到 skills-lock.json' },
-  'help':        { alias: null, desc: '顯示此說明' },
+  'diff':        { alias: 'd',  desc: '比對本機與 repo 差異',          handler: null },
+  'to-repo':     { alias: 'tr', desc: '本機設定 -> repo',              handler: null },
+  'to-local':    { alias: 'tl', desc: 'repo 設定 -> 本機',              handler: null },
+  'skills:diff': { alias: 'sd', desc: '比對 skills 差異',              handler: null },
+  'skills:add':  { alias: 'sa', desc: '新增 skill 到 skills-lock.json', handler: null },
+  'help':        { alias: null, desc: '顯示此說明',                    handler: null },
 };
 
 /** 由 COMMANDS 自動建立的別名對應表 */
@@ -77,6 +78,30 @@ const COMMAND_ALIASES = Object.fromEntries(
 
 /** 所有可用指令（由 COMMANDS 自動產生） */
 const VALID_COMMANDS = Object.keys(COMMANDS);
+
+// -----------------------------------------------------------------------------
+// Type definitions（集中管理，方便查閱）
+// -----------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} SyncItem
+ * @property {string} label - 顯示名稱
+ * @property {string} src - 來源路徑
+ * @property {string} dest - 目的路徑
+ * @property {'file'|'settings'|'dir'} type - 項目類型
+ * @property {string} [verboseSrc] - verbose 模式的來源路徑
+ * @property {string} [verboseDest] - verbose 模式的目的路徑
+ */
+
+/**
+ * @typedef {Object} ParsedArgs
+ * @property {string|null} command - 指令名稱
+ * @property {boolean} dryRun - 是否為 dry-run 模式
+ * @property {boolean} verbose - 是否為 verbose 模式
+ * @property {boolean} showVersion - 是否顯示版本
+ * @property {boolean} showHelp - 是否顯示 help
+ * @property {string[]} extraArgs - 指令之後的額外 positional 引數
+ */
 
 // =============================================================================
 // Section: ANSI Colors -- 終端機色碼處理
@@ -147,13 +172,40 @@ function formatError(err) {
   };
 
   console.error(col.red(`  [!] ${err.message}`));
-  if (err.context && err.context.path) {
-    console.error(col.dim(`      路徑：${err.context.path}`));
+  // 顯示所有 context 欄位（除 stack 等內部欄位）；path 顯示 relative 避免洩漏
+  if (err.context && typeof err.context === 'object') {
+    const ignored = new Set(['stack']);
+    for (const [key, value] of Object.entries(err.context)) {
+      if (ignored.has(key) || value === undefined || value === null) continue;
+      const display = key === 'path' ? toRelativePath(String(value)) : String(value);
+      console.error(col.dim(`      ${key}：${display}`));
+    }
   }
   const hint = hints[err.code];
   if (hint) {
     console.error(col.dim(`      提示：${hint}`));
   }
+}
+
+/**
+ * 將絕對路徑轉為相對路徑（相對於 REPO_ROOT 或 cwd），避免洩漏使用者目錄
+ * 若 relative 反而更長或跳出太多層，則保留原路徑
+ * @param {string} filePath
+ * @returns {string}
+ */
+function toRelativePath(filePath) {
+  if (!filePath || !path.isAbsolute(filePath)) return filePath;
+  // 優先：若在 REPO_ROOT 內，顯示相對於 repo 的路徑
+  const relRepo = path.relative(REPO_ROOT, filePath);
+  if (!relRepo.startsWith('..') && relRepo.length < filePath.length) {
+    return relRepo || filePath;
+  }
+  // 其次：若在 HOME 內，以 ~ 代替（避免洩漏使用者名稱）
+  if (HOME && filePath.startsWith(HOME + path.sep)) {
+    return '~' + filePath.slice(HOME.length).replace(/\\/g, '/');
+  }
+  // 其它：系統暫存檔等，保留原路徑
+  return filePath;
 }
 
 // =============================================================================
@@ -653,7 +705,14 @@ function printFileDiff(srcPath, destPath, label) {
     const result = spawnSync('diff', ['-u', destPath, srcPath], { encoding: 'utf8' });
     if (!result.error && result.stdout.trim()) {
       console.log(col.bold(`\n  -- ${label}`));
-      for (const line of result.stdout.split('\n')) {
+      // relative 路徑用於 header 遮罩，避免洩漏使用者目錄
+      const relDest = toRelativePath(destPath);
+      const relSrc = toRelativePath(srcPath);
+      for (const rawLine of result.stdout.split('\n')) {
+        // 覆寫 header 路徑為 relative 版本
+        let line = rawLine;
+        if (line.startsWith('--- ')) line = `--- ${relDest}`;
+        else if (line.startsWith('+++ ')) line = `+++ ${relSrc}`;
         if (line.startsWith('---') || line.startsWith('+++')) {
           console.log(col.dim('  ' + line));
         } else if (line.startsWith('-')) {
@@ -863,16 +922,6 @@ function appendSyncLog(direction, changes) {
 // buildSyncItems / applySyncItems / showGitStatus
 // 三個指令（diff / to-repo / to-local）共用同一套邏輯
 // =============================================================================
-
-/**
- * @typedef {Object} SyncItem
- * @property {string} label - 顯示名稱
- * @property {string} src - 來源路徑
- * @property {string} dest - 目的路徑
- * @property {'file'|'settings'|'dir'} type - 項目類型
- * @property {string} [verboseSrc] - verbose 模式的來源路徑
- * @property {string} [verboseDest] - verbose 模式的目的路徑
- */
 
 /**
  * 建立同步項目清單
@@ -1541,16 +1590,6 @@ function runHelp() {
 // =============================================================================
 
 /**
- * @typedef {Object} ParsedArgs
- * @property {string|null} command - 指令名稱
- * @property {boolean} dryRun - 是否為 dry-run 模式
- * @property {boolean} verbose - 是否為 verbose 模式
- * @property {boolean} showVersion - 是否顯示版本
- * @property {boolean} showHelp - 是否顯示 help
- * @property {string[]} extraArgs - 指令之後的額外 positional 引數
- */
-
-/**
  * 解析 CLI 引數
  * @returns {ParsedArgs}
  */
@@ -1638,6 +1677,9 @@ function askConfirm(question) {
  * @returns {Promise<void>}
  */
 async function main() {
+  // 注入各指令 handler（延遲到 main 執行階段，避免宣告順序 TDZ 問題）
+  attachCommandHandlers();
+
   const opts = parseArgs();
 
   // --version：透過 printVersion 統一處理（與 runHelp 對稱）
@@ -1652,48 +1694,64 @@ async function main() {
     return EXIT_OK;
   }
 
-  // 無指令
+  // 無指令：顯示 help 並以 EXIT_ERROR 退出（語意：使用錯誤）
   if (!opts.command) {
     runHelp();
     return EXIT_ERROR;
   }
 
   // 無效指令
-  if (!VALID_COMMANDS.includes(opts.command)) {
-    throw new SyncError(
-      `未知指令：${opts.command}`,
-      ERR.INVALID_ARGS,
-    );
+  const entry = COMMANDS[opts.command];
+  if (!entry || !entry.handler) {
+    throw new SyncError(`未知指令：${opts.command}`, ERR.INVALID_ARGS);
   }
 
-  // 分派指令
-  let exitCode = EXIT_OK;
-
-  switch (opts.command) {
-    case 'diff':
-      exitCode = runDiff(opts);
-      break;
-    case 'to-repo':
-      exitCode = runToRepo(opts);
-      break;
-    case 'to-local':
-      exitCode = await runToLocal(opts);
-      break;
-    case 'skills:diff':
-      exitCode = runSkillsDiff();
-      break;
-    case 'skills:add':
-      exitCode = runSkillsAdd(opts);
-      break;
-  }
-
-  return exitCode;
+  // Data-driven dispatch：sync/async 皆以 await 統一處理
+  return await entry.handler(opts);
 }
 
-// 統一出口：main() 回傳 exit code，由此處統一呼叫 process.exit
-main().then(exitCode => {
-  process.exit(exitCode);
-}).catch(err => {
-  formatError(err);
-  process.exit(EXIT_ERROR);
-});
+/**
+ * 將各指令 handler 注入 COMMANDS 表（data-driven dispatch）
+ * @returns {void}
+ */
+function attachCommandHandlers() {
+  COMMANDS['diff'].handler        = (opts) => runDiff(opts);
+  COMMANDS['to-repo'].handler     = (opts) => runToRepo(opts);
+  COMMANDS['to-local'].handler    = (opts) => runToLocal(opts);
+  COMMANDS['skills:diff'].handler = ()     => runSkillsDiff();
+  COMMANDS['skills:add'].handler  = (opts) => runSkillsAdd(opts);
+  COMMANDS['help'].handler        = ()     => { runHelp(); return EXIT_OK; };
+}
+
+// -----------------------------------------------------------------------------
+// 測試用 exports：僅在被 require 時匯出純函式，允許 node:test 引入
+// 直接執行（node sync.js ...）時走下方 main() 分派
+// -----------------------------------------------------------------------------
+if (require.main === module) {
+  // 統一出口：main() 回傳 exit code，由此處統一呼叫 process.exit
+  main().then(exitCode => {
+    process.exit(exitCode);
+  }).catch(err => {
+    formatError(err);
+    process.exit(EXIT_ERROR);
+  });
+} else {
+  module.exports = {
+    // 純函式 / 輔助：供單元測試使用
+    computeLineDiff,
+    computeSimpleLineDiff,
+    matchExclude,
+    statusToStatsKey,
+    parseSkillSource,
+    parseArgs,
+    toRelativePath,
+    SyncError,
+    ERR,
+    EXIT_OK,
+    EXIT_DIFF,
+    EXIT_ERROR,
+    COMMANDS,
+    COMMAND_ALIASES,
+    VALID_COMMANDS,
+  };
+}

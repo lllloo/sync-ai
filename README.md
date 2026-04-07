@@ -22,6 +22,9 @@ npm run skills:diff
 # 新增 skill 到 skills-lock.json
 npm run skills:add -- https://skills.sh/<org>/<repo>/<skill>
 npm run skills:add -- <name> <source>
+
+# 執行單元測試（node:test，零外部相依）
+npm test
 ```
 
 ### 指令別名
@@ -66,6 +69,7 @@ npm run to-local
 | 檔案 | 說明 |
 |------|------|
 | `sync.js` | 主腳本，實作所有指令邏輯（無外部相依） |
+| `test/sync.test.js` | 純函式單元測試（使用 Node.js 內建 `node:test`） |
 | `package.json` | 定義所有 npm 指令 |
 | `claude/CLAUDE.md` | 對應 `~/.claude/CLAUDE.md` |
 | `claude/settings.json` | 對應 `~/.claude/settings.json` |

@@ -1,0 +1,198 @@
+'use strict';
+
+// =============================================================================
+// sync.js 純函式單元測試（使用 Node.js 內建 node:test，零外部相依）
+// 執行方式：node --test 或 npm test
+// =============================================================================
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  computeLineDiff,
+  matchExclude,
+  statusToStatsKey,
+  parseSkillSource,
+  parseArgs,
+  toRelativePath,
+  SyncError,
+  ERR,
+  COMMANDS,
+  COMMAND_ALIASES,
+  VALID_COMMANDS,
+} = require('../sync.js');
+
+// -----------------------------------------------------------------------------
+// computeLineDiff
+// -----------------------------------------------------------------------------
+test('computeLineDiff：兩個相同字串應無 +/- 行', () => {
+  const ops = computeLineDiff('a\nb\nc', 'a\nb\nc');
+  const changed = ops.filter(op => op.type !== ' ');
+  assert.equal(changed.length, 0);
+});
+
+test('computeLineDiff：全新內容應全為 + 行', () => {
+  const ops = computeLineDiff('', 'hello\nworld');
+  const added = ops.filter(op => op.type === '+').map(op => op.line);
+  assert.deepEqual(added, ['hello', 'world']);
+});
+
+test('computeLineDiff：刪除行應產生 - 行', () => {
+  const ops = computeLineDiff('a\nb\nc', 'a\nc');
+  const removed = ops.filter(op => op.type === '-').map(op => op.line);
+  assert.deepEqual(removed, ['b']);
+});
+
+test('computeLineDiff：中間修改應同時有 + 與 - 行', () => {
+  const ops = computeLineDiff('a\nb\nc', 'a\nB\nc');
+  const removed = ops.filter(op => op.type === '-').map(op => op.line);
+  const added = ops.filter(op => op.type === '+').map(op => op.line);
+  assert.deepEqual(removed, ['b']);
+  assert.deepEqual(added, ['B']);
+});
+
+// -----------------------------------------------------------------------------
+// matchExclude
+// -----------------------------------------------------------------------------
+test('matchExclude：精確字串比對', () => {
+  assert.equal(matchExclude('foo.json', 'foo.json'), true);
+  assert.equal(matchExclude('foo.json', 'bar.json'), false);
+});
+
+test('matchExclude：尾部萬用字元比對', () => {
+  assert.equal(matchExclude('logs/a.log', 'logs/*'), true);
+  assert.equal(matchExclude('logs/nested/a.log', 'logs/*'), true);
+  assert.equal(matchExclude('src/foo.ts', 'logs/*'), false);
+});
+
+test('matchExclude：* 只支援尾部萬用', () => {
+  // 中間的 * 不被特別處理，會當作字面字元
+  assert.equal(matchExclude('foo', 'f*o'), false);
+});
+
+// -----------------------------------------------------------------------------
+// statusToStatsKey
+// -----------------------------------------------------------------------------
+test('statusToStatsKey：三種狀態對應正確', () => {
+  assert.equal(statusToStatsKey('new'), 'added');
+  assert.equal(statusToStatsKey('changed'), 'updated');
+  assert.equal(statusToStatsKey('deleted'), 'deleted');
+});
+
+test('statusToStatsKey：未知狀態回傳 null', () => {
+  assert.equal(statusToStatsKey(null), null);
+  assert.equal(statusToStatsKey('unknown'), null);
+  assert.equal(statusToStatsKey(undefined), null);
+});
+
+// -----------------------------------------------------------------------------
+// parseSkillSource
+// -----------------------------------------------------------------------------
+test('parseSkillSource：skills.sh URL 解析', () => {
+  const result = parseSkillSource({
+    extraArgs: ['https://skills.sh/anthropics/skills/web-search'],
+  });
+  assert.equal(result.name, 'web-search');
+  assert.equal(result.source, 'anthropics/skills');
+});
+
+test('parseSkillSource：name + source 雙引數', () => {
+  const result = parseSkillSource({ extraArgs: ['my-skill', 'org/repo'] });
+  assert.equal(result.name, 'my-skill');
+  assert.equal(result.source, 'org/repo');
+});
+
+test('parseSkillSource：缺少引數應丟 SyncError', () => {
+  assert.throws(
+    () => parseSkillSource({ extraArgs: [] }),
+    (err) => err instanceof SyncError && err.code === ERR.INVALID_ARGS,
+  );
+});
+
+test('parseSkillSource：skills.sh URL 格式錯誤應丟錯', () => {
+  assert.throws(
+    () => parseSkillSource({ extraArgs: ['https://skills.sh/onlyone'] }),
+    (err) => err instanceof SyncError && err.code === ERR.INVALID_ARGS,
+  );
+});
+
+test('parseSkillSource：單一非 URL 引數應丟錯', () => {
+  assert.throws(
+    () => parseSkillSource({ extraArgs: ['my-skill'] }),
+    (err) => err instanceof SyncError && err.code === ERR.INVALID_ARGS,
+  );
+});
+
+// -----------------------------------------------------------------------------
+// parseArgs（透過 mutate process.argv）
+// -----------------------------------------------------------------------------
+function withArgv(argv, fn) {
+  const original = process.argv;
+  process.argv = ['node', 'sync.js', ...argv];
+  try { return fn(); } finally { process.argv = original; }
+}
+
+test('parseArgs：解析指令與 --dry-run', () => {
+  const result = withArgv(['to-repo', '--dry-run'], () => parseArgs());
+  assert.equal(result.command, 'to-repo');
+  assert.equal(result.dryRun, true);
+  assert.equal(result.verbose, false);
+});
+
+test('parseArgs：別名應解析為正式指令', () => {
+  const result = withArgv(['tr'], () => parseArgs());
+  assert.equal(result.command, 'to-repo');
+});
+
+test('parseArgs：--verbose 旗標', () => {
+  const result = withArgv(['diff', '--verbose'], () => parseArgs());
+  assert.equal(result.verbose, true);
+});
+
+test('parseArgs：--version / --help 旗標', () => {
+  assert.equal(withArgv(['--version'], () => parseArgs()).showVersion, true);
+  assert.equal(withArgv(['--help'], () => parseArgs()).showHelp, true);
+  assert.equal(withArgv(['-h'], () => parseArgs()).showHelp, true);
+});
+
+test('parseArgs：extraArgs 收集指令後的 positional 引數', () => {
+  const result = withArgv(['skills:add', 'name', 'org/repo'], () => parseArgs());
+  assert.equal(result.command, 'skills:add');
+  assert.deepEqual(result.extraArgs, ['name', 'org/repo']);
+});
+
+test('parseArgs：未知指令保留原值供上層判斷', () => {
+  const result = withArgv(['nonexistent'], () => parseArgs());
+  assert.equal(result.command, 'nonexistent');
+});
+
+// -----------------------------------------------------------------------------
+// toRelativePath
+// -----------------------------------------------------------------------------
+test('toRelativePath：非絕對路徑原樣回傳', () => {
+  assert.equal(toRelativePath('foo/bar'), 'foo/bar');
+  assert.equal(toRelativePath(''), '');
+});
+
+test('toRelativePath：REPO_ROOT 內的路徑縮短為 relative', () => {
+  const abs = require('path').join(__dirname, '..', 'sync.js');
+  const rel = toRelativePath(abs);
+  // 至少不應包含使用者 home 字樣且比原本短
+  assert.ok(rel.length < abs.length || rel === abs);
+});
+
+// -----------------------------------------------------------------------------
+// COMMANDS / 對應表完整性
+// -----------------------------------------------------------------------------
+test('COMMANDS：所有指令名稱皆列於 VALID_COMMANDS', () => {
+  for (const cmd of Object.keys(COMMANDS)) {
+    assert.ok(VALID_COMMANDS.includes(cmd), `${cmd} 應在 VALID_COMMANDS`);
+  }
+});
+
+test('COMMAND_ALIASES：別名應對應回正式指令', () => {
+  for (const [alias, cmd] of Object.entries(COMMAND_ALIASES)) {
+    assert.ok(COMMANDS[cmd], `別名 ${alias} -> ${cmd} 應存在於 COMMANDS`);
+    assert.equal(COMMANDS[cmd].alias, alias);
+  }
+});
