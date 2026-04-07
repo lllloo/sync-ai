@@ -1,67 +1,73 @@
 ## GAN Harness Build Report
 
 **Brief:** 優化 sync-ai 同步系統
-**Result:** PASS
-**Iterations:** 2 / 15
-**Final Score:** 7.55 / 10 (Grade A)
+**Result:** PASS (S 等級)
+**Iterations:** 4 / 15
+**Final Score:** 9.00 / 10 (Grade S)
 
 ### Score Progression
 
-| Iter | 程式碼品質 (0.30) | 可靠性 (0.25) | 使用者體驗 (0.25) | 可維護性 (0.20) | Total |
-|------|-------------------|---------------|-------------------|-----------------|-------|
-| 1    | 7                 | 6             | 7                 | 6               | 6.55  |
-| 2    | 8                 | 8             | 7                 | 7               | 7.55  |
+| Iter | 程式碼品質 (0.30) | 可靠性 (0.25) | 使用者體驗 (0.25) | 可維護性 (0.20) | Total | Grade |
+|------|-------------------|---------------|-------------------|-----------------|-------|-------|
+| 1    | 7                 | 6             | 7                 | 6               | 6.55  | B     |
+| 2    | 8                 | 8             | 7                 | 7               | 7.55  | A     |
+| 3    | 9                 | 8             | 8                 | 8               | 8.30  | A     |
+| 4    | 9                 | 9             | 9                 | 9               | 9.00  | **S** |
 
-### Key Improvements
+### Key Improvements by Iteration
 
-**Sprint 1 — 健壯基礎（全部完成）**
-- `SyncError` class 統一錯誤處理，含 `code` + `context` 屬性
+**Iteration 1 → 2（6.55 → 7.55）Sprint 1-3 全部完成**
+- `SyncError` class 統一錯誤處理
 - 檔案操作防禦性處理（EACCES/EPERM/ENOENT 區分）
-- `git()` 函式含 stderr 處理與可用性檢查
-- Exit code 語義化：`EXIT_OK=0`、`EXIT_DIFF=1`、`EXIT_ERROR=2`
-- 統一 `STATUS_ICONS` 映射表，固定寬度輸出
-- Tempfile 透過 `process.on('exit')` 可靠清理
-- 程式碼 section banner 分區
+- Exit code 語義化常數
+- `--dry-run`、`--verbose`、`help`、`--version`、別名
+- 純 JS line diff、SIGINT handler、操作日誌、atomic JSON write
+- 修復 `to-repo --dry-run` 誤報 bug
+- 大函式拆分：`runToRepo` 133→43 行、`runToLocal` 159→56 行
 
-**Sprint 2 — UX 強化（全部完成）**
-- `--dry-run` 旗標（to-repo / to-local 均支援）
-- `--verbose` 旗標
-- 操作摘要統計行
-- 純 JS line diff（不依賴外部 `diff` 指令）
-- `help` 指令 + `--help` 旗標
-- 指令別名（`d`/`tr`/`tl`/`sd`/`sa`）
-- `--version` 從 package.json 讀取
+**Iteration 2 → 3（7.55 → 8.30）前次 9 個 issues 全部修復**
+- `runDiff` 85→38 行（抽 `buildFullDiffList` + `printDetailedDiff`）
+- `runSkillsAdd` 63→28 行（抽 `parseSkillSource`）
+- `to-local --dry-run` 補上摘要統計行
+- `computeSimpleLineDiff` 大檔案顯示近似結果提示
+- `to-local` 預覽不再呼叫 `applySyncItems` 兩次
+- 排序改用 `itemType` 欄位，不再依賴脆弱字串檢查
+- `main()` 所有分支統一 return exit code
 
-**Sprint 3 — 進階可靠性（全部完成）**
-- SIGINT/SIGTERM handler（re-raise signal 方式）
-- 操作日誌追加到 `.sync-history.log`
-- JSON 安全寫入（write-to-tmp + rename）
+**Iteration 3 → 4（8.30 → 9.00）最後打磨**
+- `runToLocal` 70→29 行（抽 `printToLocalPreview` + `confirmAndApply`）
+- `diffSyncItems` 62→38 行（抽 `diffSettingsItem`）
+- `runHelp` 改用 `String#padEnd` + `CMD_COL_WIDTH`/`ALIAS_COL_WIDTH` 常數
+- 新增 `statusToStatsKey` helper
+- `buildFullDiffList` 改為純函式
+- 抽 `LCS_MAX_LINES = 2000` 常數
+- 新增 `printVersion()` 與 `runHelp()` 對稱
 
-**Iteration 2 修復**
-- 修復 `to-repo --dry-run` 誤報 bug（28 個虛假更新 → 正確報告）
-- 大函式拆分為 `buildSyncItems`/`applySyncItems`/`showGitStatus` 等共用邏輯
-- Windows diff 可用性快取（`isDiffAvailable()` lazy getter）
-- `skills:add` 引數解析集中化
-- JSDoc 覆蓋率 100%（44/44 函式）
+### 最終函式行數稽核
+
+**首次 100% 達標** — 全部 52 個函式 ≤ 60 行
+- 最大函式：`buildSyncItems` 54 行（宣告式資料）
+- 最大邏輯函式：`main` 52 行
 
 ### Remaining Issues
 
-- `runDiff` 仍有 85 行（超過 60 行建議上限）
-- `runSkillsAdd` 有 63 行（略超）
-- `to-local --dry-run` 缺少摘要統計行
-- `computeSimpleLineDiff` 大檔案使用 Set 近似比對
+無 Critical / Major issues。Evaluator 建議停在此版本 —— 進一步提升至 9.5+ 需要 unit test 與 CI，已超出單檔 CLI 的 scope。
 
 ### Files
 
-- `sync.js` — 624 行 → 1605 行（新增功能與 JSDoc）
+- `sync.js` — 最終版（包含所有優化）
 - `gan-harness/spec.md`
 - `gan-harness/eval-rubric.md`
 - `gan-harness/feedback/feedback-1.md`
 - `gan-harness/feedback/feedback-2.md`
+- `gan-harness/feedback/feedback-3.md`
+- `gan-harness/feedback/feedback-4.md`
+- `gan-harness/generator-state.md`
 - `gan-harness/build-report.md`
 
 ### Timing
 
 - Start: 2026-04-07T09:08:12
-- End: 2026-04-07T09:54:50
-- Duration: ~47 minutes
+- End: 2026-04-07 (iteration 4 完成)
+- Iterations: 4
+- Progression: 6.55 → 7.55 → 8.30 → **9.00**
