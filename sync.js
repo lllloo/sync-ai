@@ -1408,7 +1408,7 @@ function runSkillsDiff() {
     for (const name of onlyInRepo) {
       const skill = repoSkills[name];
       if (skill && skill.source) {
-        console.log(`    npx skills add ${skill.source} -g -y --skill ${name} --agent claude-code`);
+        console.log(`    npx skills add ${skill.source} -g -y --skill ${name}`);
       }
     }
   }
@@ -1490,7 +1490,7 @@ function runSkillsAdd(opts) {
   console.log(col.bold(`\n  已加入 ${col.cyan(name)}`));
   console.log(col.dim(`  source: ${source}\n`));
   console.log(col.bold('  安裝指令：'));
-  console.log(`    npx skills add ${source} -g -y --skill ${name} --agent claude-code\n`);
+  console.log(`    npx skills add ${source} -g -y --skill ${name}\n`);
   return EXIT_OK;
 }
 
