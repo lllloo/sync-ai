@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **同步：**
 - `npm run diff` — 純比較本機 vs repo，顯示差異（不寫任何東西）
+- `npm run status` — 同時比較設定與 skills 差異（等同依序執行 `diff` + `skills:diff`）
 - `npm run to-repo` — 本機 → repo（完成後顯示 git diff）
 - `npm run to-local` — repo → 本機（先預覽，確認後才套用）
 
@@ -27,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm test` — 執行 `test/sync.test.js` 純函式單元測試（`node --test`，零相依）
 - 單一測試：`node --test --test-name-pattern="<name>" test/sync.test.js`
 
-**全域旗標**（`node sync.js` 直接呼叫時可用）：`--dry-run`、`--verbose`、`--version`、`--help`。指令別名：`d`/`tr`/`tl`/`sd`/`sa`。
+**全域旗標**（`node sync.js` 直接呼叫時可用）：`--dry-run`、`--verbose`、`--version`、`--help`。指令別名：`d`/`s`/`tr`/`tl`/`sd`/`sa`。
 
 ## 同步項目與對應
 

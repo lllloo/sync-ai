@@ -10,6 +10,9 @@
 # 比較本機 vs repo 差異（不寫任何東西）
 npm run diff
 
+# 同時比較設定與 skills 差異
+npm run status
+
 # 本機設定 → repo（上傳）
 npm run to-repo
 
@@ -34,6 +37,7 @@ npm test
 | 指令 | 別名 |
 |------|------|
 | `diff` | `d` |
+| `status` | `s` |
 | `to-repo` | `tr` |
 | `to-local` | `tl` |
 | `skills:diff` | `sd` |

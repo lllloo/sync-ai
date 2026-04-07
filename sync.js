@@ -62,6 +62,7 @@ const STATUS_ICONS = {
  */
 const COMMANDS = {
   'diff':        { alias: 'd',  desc: '比對本機與 repo 差異',          handler: null },
+  'status':      { alias: 's',  desc: '同時比對設定與 skills 差異',     handler: null },
   'to-repo':     { alias: 'tr', desc: '本機設定 -> repo',              handler: null },
   'to-local':    { alias: 'tl', desc: 'repo 設定 -> 本機',              handler: null },
   'skills:diff': { alias: 'sd', desc: '比對 skills 差異',              handler: null },
@@ -1275,6 +1276,17 @@ function runDiff(opts) {
 }
 
 /**
+ * diff:all 指令：依序執行 diff 與 skills:diff
+ * @param {ParsedArgs} opts - CLI 引數
+ * @returns {number} exit code（有任一差異即回傳 EXIT_DIFF）
+ */
+function runDiffAll(opts) {
+  const diffCode = runDiff(opts);
+  const skillsCode = runSkillsDiff();
+  return (diffCode === EXIT_OK && skillsCode === EXIT_OK) ? EXIT_OK : EXIT_DIFF;
+}
+
+/**
  * to-repo 指令：本機設定同步到 repo
  * @param {ParsedArgs} opts - CLI 引數
  * @returns {number} exit code
@@ -1716,6 +1728,7 @@ async function main() {
  */
 function attachCommandHandlers() {
   COMMANDS['diff'].handler        = (opts) => runDiff(opts);
+  COMMANDS['status'].handler      = (opts) => runDiffAll(opts);
   COMMANDS['to-repo'].handler     = (opts) => runToRepo(opts);
   COMMANDS['to-local'].handler    = (opts) => runToLocal(opts);
   COMMANDS['skills:diff'].handler = ()     => runSkillsDiff();
