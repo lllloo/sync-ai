@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// sync-ai — 跨裝置 Claude Code 設定同步工具
+// =============================================================================
+// sync-ai -- 跨裝置 Claude Code 設定同步工具
 // 單檔架構，零外部相依
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -12,10 +12,10 @@ const os = require('os');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Constants — 全域常數與設定
+// =============================================================================
+// Section: Constants -- 全域常數與設定
 // 集中管理所有 magic values，方便查閱與修改
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /** Process exit codes（語義化，可用於 CI 判斷） */
 const EXIT_OK = 0;
@@ -37,30 +37,41 @@ const GLOBAL_EXCLUDE = ['.DS_Store'];
 
 /** 統一的狀態圖示映射表，確保語義一致與對齊 */
 const STATUS_ICONS = {
-  ok:      { icon: '✓', color: 'dim'    },  // 一致
+  ok:      { icon: '\u2713', color: 'dim'    },  // 一致
   added:   { icon: '+', color: 'green'  },  // 新增
   changed: { icon: '~', color: 'yellow' },  // 變更
   deleted: { icon: '-', color: 'red'    },  // 刪除
-  up:      { icon: '↑', color: 'cyan'   },  // 本機有、repo 沒有
-  down:    { icon: '↓', color: 'yellow' },  // repo 有、本機沒有
+  up:      { icon: '\u2191', color: 'cyan'   },  // 本機有、repo 沒有
+  down:    { icon: '\u2193', color: 'yellow' },  // repo 有、本機沒有
 };
 
-/** 指令別名對應 */
-const COMMAND_ALIASES = {
-  d:   'diff',
-  tr:  'to-repo',
-  tl:  'to-local',
-  sd:  'skills:diff',
-  sa:  'skills:add',
+/**
+ * 指令定義：統一管理指令名稱、別名與說明
+ * @type {Record<string, {alias: string|null, desc: string}>}
+ */
+const COMMANDS = {
+  'diff':        { alias: 'd',  desc: '比對本機與 repo 差異' },
+  'to-repo':     { alias: 'tr', desc: '本機設定 -> repo' },
+  'to-local':    { alias: 'tl', desc: 'repo 設定 -> 本機' },
+  'skills:diff': { alias: 'sd', desc: '比對 skills 差異' },
+  'skills:add':  { alias: 'sa', desc: '新增 skill 到 skills-lock.json' },
+  'help':        { alias: null, desc: '顯示此說明' },
 };
 
-/** 所有可用指令 */
-const VALID_COMMANDS = ['to-repo', 'to-local', 'diff', 'skills:diff', 'skills:add', 'help'];
+/** 由 COMMANDS 自動建立的別名對應表 */
+const COMMAND_ALIASES = Object.fromEntries(
+  Object.entries(COMMANDS)
+    .filter(([_, v]) => v.alias)
+    .map(([cmd, v]) => [v.alias, cmd])
+);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: ANSI Colors — 終端機色碼處理
+/** 所有可用指令（由 COMMANDS 自動產生） */
+const VALID_COMMANDS = Object.keys(COMMANDS);
+
+// =============================================================================
+// Section: ANSI Colors -- 終端機色碼處理
 // 只在 TTY 環境下輸出 ANSI 色碼，否則輸出純文字
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 const isTTY = process.stdout.isTTY;
 const col = {
@@ -72,10 +83,10 @@ const col = {
   dim:    (/** @type {string} */ t) => isTTY ? `\x1b[2m${t}\x1b[0m`  : t,
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Errors — 統一錯誤處理框架
+// =============================================================================
+// Section: Errors -- 統一錯誤處理框架
 // 定義 SyncError class，所有錯誤統一經過此 class 拋出
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 統一錯誤類型，包含錯誤代碼與上下文資訊
@@ -108,6 +119,7 @@ const ERR = {
 /**
  * 根據 SyncError 的 code 輸出友善錯誤訊息（含修復建議）
  * @param {SyncError|Error} err
+ * @returns {void}
  */
 function formatError(err) {
   if (!(err instanceof SyncError)) {
@@ -134,10 +146,10 @@ function formatError(err) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Tempfile Registry — 暫存檔管理
+// =============================================================================
+// Section: Tempfile Registry -- 暫存檔管理
 // 確保暫存檔在任何退出路徑（含 SIGINT）都被清理
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /** @type {Set<string>} 追蹤所有待清理的暫存檔路徑 */
 const tempFiles = new Set();
@@ -145,6 +157,7 @@ const tempFiles = new Set();
 /**
  * 註冊暫存檔路徑，會在 process exit 時自動清理
  * @param {string} filePath - 暫存檔路徑
+ * @returns {void}
  */
 function registerTempFile(filePath) {
   tempFiles.add(filePath);
@@ -152,6 +165,7 @@ function registerTempFile(filePath) {
 
 /**
  * 清理所有已註冊的暫存檔
+ * @returns {void}
  */
 function cleanupTempFiles() {
   for (const f of tempFiles) {
@@ -160,41 +174,66 @@ function cleanupTempFiles() {
   tempFiles.clear();
 }
 
-// 註冊 exit 與 signal handler，確保暫存檔必定清理
+// 註冊 exit handler，確保暫存檔必定清理
 process.on('exit', cleanupTempFiles);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Signal Handling — 中斷訊號處理
+// =============================================================================
+// Section: Signal Handling -- 中斷訊號處理
 // 攔截 SIGINT/SIGTERM，在同步中斷時給出警告
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /** @type {boolean} 是否正在執行寫入操作 */
 let isWriting = false;
 
 /**
- * 處理中斷訊號
+ * 處理中斷訊號：清理暫存檔後以 re-raise signal 方式退出，
+ * 讓 OS 設定正確的 exit code
  * @param {string} signal
+ * @returns {void}
  */
 function handleSignal(signal) {
   cleanupTempFiles();
   if (isWriting) {
     console.error(col.yellow('\n  [!] 同步中斷，部分檔案可能未更新'));
   }
-  process.exit(EXIT_ERROR);
+  // 移除自身 handler 後 re-raise signal，讓 OS 設定正確的 exit code
+  process.removeListener(signal, handleSignal);
+  process.kill(process.pid, signal);
 }
 
 process.on('SIGINT', handleSignal);
 process.on('SIGTERM', handleSignal);
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: FS Utilities — 檔案系統工具函式
+// =============================================================================
+// Section: External Tool Detection -- 外部工具可用性快取
+// 在模組頂層偵測一次外部 diff 是否可用，避免每次都嘗試 spawn
+// =============================================================================
+
+/** @type {boolean|undefined} 快取外部 diff 是否可用 */
+let _diffAvailable;
+
+/**
+ * 檢查外部 diff 指令是否可用（結果會快取）
+ * @returns {boolean}
+ */
+function isDiffAvailable() {
+  if (_diffAvailable === undefined) {
+    const result = spawnSync('diff', ['--version'], { encoding: 'utf8' });
+    _diffAvailable = result.status === 0;
+  }
+  return _diffAvailable;
+}
+
+// =============================================================================
+// Section: FS Utilities -- 檔案系統工具函式
 // 封裝檔案讀寫操作，加入防禦性檢查與錯誤處理
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 檢查檔案讀取權限
  * @param {string} filePath - 要檢查的檔案路徑
  * @throws {SyncError} 當檔案無法讀取時
+ * @returns {void}
  */
 function checkReadAccess(filePath) {
   try {
@@ -211,6 +250,7 @@ function checkReadAccess(filePath) {
  * 檢查檔案寫入權限（若檔案已存在）
  * @param {string} filePath - 要檢查的檔案路徑
  * @throws {SyncError} 當檔案無法寫入時
+ * @returns {void}
  */
 function checkWriteAccess(filePath) {
   if (!fs.existsSync(filePath)) return; // 新檔案不需要檢查
@@ -255,6 +295,7 @@ function readJson(filePath) {
  * 安全寫入 JSON 檔案（write-to-tmp + rename，防止寫入中途斷電損壞）
  * @param {string} filePath - 目標檔案路徑
  * @param {unknown} data - 要序列化的資料
+ * @returns {void}
  */
 function writeJsonSafe(filePath, data) {
   checkWriteAccess(filePath);
@@ -281,16 +322,19 @@ function writeJsonSafe(filePath, data) {
 /**
  * 確保目錄存在（遞迴建立）
  * @param {string} dir - 目錄路徑
+ * @returns {void}
  */
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
 /**
- * 複製單一檔案，回傳是否有實際寫入
+ * 複製單一檔案，回傳是否有實際寫入（或在 dry-run 下是否「將會」寫入）
+ * 注意：dry-run 模式下無論 force 為何，都必須比對檔案內容，
+ * 只有內容真的不同時才回傳 true
  * @param {string} src - 來源路徑
  * @param {string} dest - 目的路徑
- * @param {boolean} [force=false] - 是否強制覆寫
+ * @param {boolean} [force=false] - 是否強制覆寫（僅在非 dry-run 時生效）
  * @param {boolean} [dryRun=false] - 若為 true 則只判斷不寫入
  * @returns {boolean} 是否有寫入（或將會寫入）
  */
@@ -298,8 +342,15 @@ function copyFile(src, dest, force = false, dryRun = false) {
   if (!fs.existsSync(src)) return false;
   checkReadAccess(src);
   const srcContent = fs.readFileSync(src);
+
+  // dry-run 時一律比對內容，不受 force 影響
+  if (dryRun) {
+    if (!fs.existsSync(dest)) return true;
+    return !srcContent.equals(fs.readFileSync(dest));
+  }
+
+  // 非 dry-run：force 或內容不同才寫入
   if (!force && fs.existsSync(dest) && srcContent.equals(fs.readFileSync(dest))) return false;
-  if (dryRun) return true;
   checkWriteAccess(dest);
   ensureDir(path.dirname(dest));
   fs.writeFileSync(dest, srcContent);
@@ -336,7 +387,7 @@ function getFiles(dir, base = '') {
  * 檢查相對路徑是否符合排除模式
  * @param {string} rel - 相對路徑
  * @param {string} pattern - 排除模式（支援尾部 * 萬用字元）
- * @returns {boolean}
+ * @returns {boolean} 是否符合排除模式
  */
 function matchExclude(rel, pattern) {
   if (pattern.endsWith('*')) return rel.startsWith(pattern.slice(0, -1));
@@ -345,10 +396,11 @@ function matchExclude(rel, pattern) {
 
 /**
  * 整目錄鏡像：以 src 為準同步到 dest，dest 多餘的刪掉
+ * 注意：dry-run 模式下一律比對內容，不受 force 影響
  * @param {string} src - 來源目錄
  * @param {string} dest - 目的目錄
  * @param {string[]} [excludePatterns=[]] - 排除模式列表
- * @param {boolean} [force=false] - 是否強制覆寫
+ * @param {boolean} [force=false] - 是否強制覆寫（僅在非 dry-run 時生效）
  * @param {boolean} [dryRun=false] - 若為 true 則只判斷不寫入
  * @returns {Array<{rel: string, action: string}>} 變更清單
  */
@@ -366,7 +418,13 @@ function mirrorDir(src, dest, excludePatterns = [], force = false, dryRun = fals
     const destFile = path.join(dest, rel);
     const srcContent = fs.readFileSync(srcFile);
     const destExists = fs.existsSync(destFile);
-    if (force || !destExists || !srcContent.equals(fs.readFileSync(destFile))) {
+
+    // dry-run 時一律比對內容，不受 force 影響
+    const needsWrite = dryRun
+      ? (!destExists || !srcContent.equals(fs.readFileSync(destFile)))
+      : (force || !destExists || !srcContent.equals(fs.readFileSync(destFile)));
+
+    if (needsWrite) {
       if (!dryRun) {
         ensureDir(path.dirname(destFile));
         fs.writeFileSync(destFile, srcContent);
@@ -391,6 +449,7 @@ function mirrorDir(src, dest, excludePatterns = [], force = false, dryRun = fals
 /**
  * 遞迴清除空目錄
  * @param {string} dir - 起始目錄
+ * @returns {void}
  */
 function cleanEmptyDirs(dir) {
   if (!fs.existsSync(dir)) return;
@@ -405,10 +464,10 @@ function cleanEmptyDirs(dir) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Git Utilities — Git 操作封裝
+// =============================================================================
+// Section: Git Utilities -- Git 操作封裝
 // 封裝 git 指令執行，含 stderr 處理與可用性檢查
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 執行 git 指令
@@ -446,10 +505,10 @@ function isGitAvailable() {
   return result.ok;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Diff Engine — 差異比較引擎
+// =============================================================================
+// Section: Diff Engine -- 差異比較引擎
 // 純比較邏輯，不寫入任何檔案
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 比較單一檔案差異
@@ -495,7 +554,7 @@ function diffDir(src, dest, excludePatterns = []) {
 }
 
 /**
- * 純 JS 實作的簡易 line diff（不依賴外部 diff 指令）
+ * 純 JS 實作的 line diff（不依賴外部 diff 指令）
  * 逐行比較兩個字串，輸出新增/刪除的行
  * @param {string} oldText - 舊版文字
  * @param {string} newText - 新版文字
@@ -504,16 +563,13 @@ function diffDir(src, dest, excludePatterns = []) {
 function computeLineDiff(oldText, newText) {
   const oldLines = oldText.split('\n');
   const newLines = newText.split('\n');
-  const result = [];
 
   // LCS-based diff for better quality
   const m = oldLines.length;
   const n = newLines.length;
 
-  // 使用簡化的 O(ND) diff：先建立 LCS 表
   // 對於小檔案用完整 LCS，大檔案用簡易逐行比對
   if (m + n > 2000) {
-    // 大檔案：簡易逐行比對
     return computeSimpleLineDiff(oldLines, newLines);
   }
 
@@ -547,7 +603,7 @@ function computeLineDiff(oldText, newText) {
 }
 
 /**
- * 簡易逐行比對（大檔案用）
+ * 簡易逐行比對（大檔案用，結果為近似值：Set 會忽略重複行的位置資訊）
  * @param {string[]} oldLines
  * @param {string[]} newLines
  * @returns {Array<{type: '+'|'-'|' ', line: string}>}
@@ -576,32 +632,33 @@ function computeSimpleLineDiff(oldLines, newLines) {
  * @param {string} srcPath - 新版檔案路徑
  * @param {string} destPath - 舊版檔案路徑
  * @param {string} label - 顯示用標籤
+ * @returns {void}
  */
 function printFileDiff(srcPath, destPath, label) {
-  // 嘗試使用外部 diff 指令
-  const result = spawnSync('diff', ['-u', destPath, srcPath], { encoding: 'utf8' });
-
-  if (result.error) {
-    // 外部 diff 不可用，使用純 JS fallback
-    printJsDiff(srcPath, destPath, label);
-    return;
-  }
-
-  if (!result.stdout.trim()) return;
-  console.log(col.bold(`\n  -- ${label}`));
-  for (const line of result.stdout.split('\n')) {
-    if (line.startsWith('---') || line.startsWith('+++')) {
-      console.log(col.dim('  ' + line));
-    } else if (line.startsWith('-')) {
-      console.log(col.red('  ' + line));
-    } else if (line.startsWith('+')) {
-      console.log(col.green('  ' + line));
-    } else if (line.startsWith('@@')) {
-      console.log(col.cyan('  ' + line));
-    } else {
-      console.log('  ' + line);
+  // 使用快取的可用性檢查，避免每次都 spawn
+  if (isDiffAvailable()) {
+    const result = spawnSync('diff', ['-u', destPath, srcPath], { encoding: 'utf8' });
+    if (!result.error && result.stdout.trim()) {
+      console.log(col.bold(`\n  -- ${label}`));
+      for (const line of result.stdout.split('\n')) {
+        if (line.startsWith('---') || line.startsWith('+++')) {
+          console.log(col.dim('  ' + line));
+        } else if (line.startsWith('-')) {
+          console.log(col.red('  ' + line));
+        } else if (line.startsWith('+')) {
+          console.log(col.green('  ' + line));
+        } else if (line.startsWith('@@')) {
+          console.log(col.cyan('  ' + line));
+        } else {
+          console.log('  ' + line);
+        }
+      }
+      return;
     }
   }
+
+  // 外部 diff 不可用或無差異，使用純 JS fallback
+  printJsDiff(srcPath, destPath, label);
 }
 
 /**
@@ -609,6 +666,7 @@ function printFileDiff(srcPath, destPath, label) {
  * @param {string} srcPath - 新版檔案路徑
  * @param {string} destPath - 舊版檔案路徑
  * @param {string} label - 顯示用標籤
+ * @returns {void}
  */
 function printJsDiff(srcPath, destPath, label) {
   let oldText = '', newText = '';
@@ -626,7 +684,6 @@ function printJsDiff(srcPath, destPath, label) {
   for (let idx = 0; idx < ops.length; idx++) {
     if (ops[idx].type === ' ') continue;
 
-    // 印出 context（前 2 行）
     const ctxStart = Math.max(0, idx - 2);
     if (ctxStart > lastPrinted + 1 && lastPrinted >= 0) {
       console.log(col.dim('  ...'));
@@ -635,7 +692,6 @@ function printJsDiff(srcPath, destPath, label) {
       if (ops[c].type === ' ') console.log('  ' + ops[c].line);
     }
 
-    // 印出差異行
     if (ops[idx].type === '+') {
       console.log(col.green('  +' + ops[idx].line));
     } else {
@@ -643,29 +699,29 @@ function printJsDiff(srcPath, destPath, label) {
     }
     lastPrinted = idx;
 
-    // 印出 context（後 2 行）
     const ctxEnd = Math.min(ops.length - 1, idx + 2);
     for (let c = idx + 1; c <= ctxEnd; c++) {
       if (ops[c].type === ' ') {
         console.log('  ' + ops[c].line);
         lastPrinted = c;
       } else {
-        break; // 下一個差異行會自己處理
+        break;
       }
     }
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Display Utilities — 輸出格式化工具
+// =============================================================================
+// Section: Display Utilities -- 輸出格式化工具
 // 統一的狀態行輸出格式，確保對齊與語義一致
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 格式化並輸出一行狀態
- * @param {keyof STATUS_ICONS} type - 狀態類型
+ * @param {keyof typeof STATUS_ICONS} type - 狀態類型
  * @param {string} label - 項目名稱
  * @param {string} [desc=''] - 描述文字
+ * @returns {void}
  */
 function printStatusLine(type, label, desc = '') {
   const entry = STATUS_ICONS[type];
@@ -679,6 +735,7 @@ function printStatusLine(type, label, desc = '') {
 /**
  * 輸出操作摘要統計行
  * @param {{added: number, updated: number, deleted: number}} stats
+ * @returns {void}
  */
 function printSummary(stats) {
   const parts = [];
@@ -692,13 +749,26 @@ function printSummary(stats) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Settings Handler — settings.json 合併邏輯
+// =============================================================================
+// Section: Settings Handler -- settings.json 合併邏輯
 // 處理 settings.json 的裝置欄位排除與合併
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+
+/**
+ * 將 settings.json 去除裝置欄位後產生 stripped JSON 字串
+ * @param {string} filePath - settings.json 路徑
+ * @returns {string|null} stripped JSON 字串，檔案不存在時回傳 null
+ */
+function getStrippedSettings(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const data = readJson(filePath);
+  for (const field of DEVICE_FIELDS) delete data[field];
+  return JSON.stringify(data, null, 2) + '\n';
+}
 
 /**
  * 合併 settings.json（排除裝置特定欄位）
+ * dry-run 模式下會比對 stripped JSON 是否真的有差異
  * @param {'to-repo'|'to-local'} direction - 同步方向
  * @param {boolean} [dryRun=false] - 是否為 dry-run 模式
  * @returns {boolean} 是否有實際變更
@@ -708,37 +778,52 @@ function mergeSettingsJson(direction, dryRun = false) {
   const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
 
   if (direction === 'to-repo') {
-    if (!fs.existsSync(localPath)) return false;
+    const strippedLocal = getStrippedSettings(localPath);
+    if (strippedLocal === null) return false;
+
+    // 比對 stripped local 與 repo 內容
+    const repoContent = fs.existsSync(repoPath)
+      ? fs.readFileSync(repoPath, 'utf8')
+      : null;
+    if (repoContent === strippedLocal) return false;
+
+    if (dryRun) return true;
     const local = readJson(localPath);
     for (const field of DEVICE_FIELDS) delete local[field];
-    if (dryRun) return true;
     writeJsonSafe(repoPath, local);
     return true;
   } else {
     if (!fs.existsSync(repoPath)) return false;
     const repo = readJson(repoPath);
+    const repoStr = JSON.stringify(repo, null, 2);
+
+    // 比對 repo 與 stripped local
+    const local = fs.existsSync(localPath) ? readJson(localPath) : {};
     const deviceValues = {};
-    if (fs.existsSync(localPath)) {
-      const local = readJson(localPath);
-      for (const field of DEVICE_FIELDS) {
-        if (local[field] !== undefined) deviceValues[field] = local[field];
-      }
+    for (const field of DEVICE_FIELDS) {
+      if (local[field] !== undefined) deviceValues[field] = local[field];
     }
+    const localClean = { ...local };
+    for (const field of DEVICE_FIELDS) delete localClean[field];
+    const localStr = JSON.stringify(localClean, null, 2);
+    if (repoStr === localStr) return false;
+
     if (dryRun) return true;
     writeJsonSafe(localPath, { ...repo, ...deviceValues });
     return true;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Operation Log — 操作日誌
+// =============================================================================
+// Section: Operation Log -- 操作日誌
 // 每次同步後追加紀錄到 .sync-history.log
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 追加操作日誌
  * @param {string} direction - 操作方向（to-repo / to-local）
  * @param {string[]} changes - 變更清單
+ * @returns {void}
  */
 function appendSyncLog(direction, changes) {
   try {
@@ -755,10 +840,243 @@ function appendSyncLog(direction, changes) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Commands — 各指令的實作
+// =============================================================================
+// Section: Sync Core -- 共用同步邏輯
+// buildSyncItems / applySyncItems / showGitStatus
+// 三個指令（diff / to-repo / to-local）共用同一套邏輯
+// =============================================================================
+
+/**
+ * @typedef {Object} SyncItem
+ * @property {string} label - 顯示名稱
+ * @property {string} src - 來源路徑
+ * @property {string} dest - 目的路徑
+ * @property {'file'|'settings'|'dir'} type - 項目類型
+ * @property {string} [verboseSrc] - verbose 模式的來源路徑
+ * @property {string} [verboseDest] - verbose 模式的目的路徑
+ */
+
+/**
+ * 建立同步項目清單
+ * @param {'to-repo'|'to-local'} direction - 同步方向
+ * @returns {SyncItem[]}
+ */
+function buildSyncItems(direction) {
+  const isToRepo = direction === 'to-repo';
+  const localBase = CLAUDE_HOME;
+  const repoBase = path.join(REPO_ROOT, 'claude');
+
+  const src = isToRepo ? localBase : repoBase;
+  const dest = isToRepo ? repoBase : localBase;
+
+  return [
+    {
+      label: 'CLAUDE.md',
+      src: path.join(src, 'CLAUDE.md'),
+      dest: path.join(dest, 'CLAUDE.md'),
+      type: 'file',
+      verboseSrc: path.join(src, 'CLAUDE.md'),
+      verboseDest: path.join(dest, 'CLAUDE.md'),
+    },
+    {
+      label: 'settings.json',
+      src: path.join(localBase, 'settings.json'),
+      dest: path.join(repoBase, 'settings.json'),
+      type: 'settings',
+      verboseSrc: path.join(localBase, 'settings.json'),
+      verboseDest: path.join(repoBase, 'settings.json'),
+    },
+    {
+      label: 'statusline.sh',
+      src: path.join(src, 'statusline.sh'),
+      dest: path.join(dest, 'statusline.sh'),
+      type: 'file',
+      verboseSrc: path.join(src, 'statusline.sh'),
+      verboseDest: path.join(dest, 'statusline.sh'),
+    },
+    {
+      label: 'agents',
+      src: path.join(src, 'agents'),
+      dest: path.join(dest, 'agents'),
+      type: 'dir',
+      verboseSrc: path.join(src, 'agents'),
+      verboseDest: path.join(dest, 'agents'),
+    },
+    {
+      label: 'commands',
+      src: path.join(src, 'commands'),
+      dest: path.join(dest, 'commands'),
+      type: 'dir',
+      verboseSrc: path.join(src, 'commands'),
+      verboseDest: path.join(dest, 'commands'),
+    },
+  ];
+}
+
+/**
+ * 對同步項目執行 diff，回傳差異清單
+ * @param {SyncItem[]} items - 同步項目清單
+ * @param {'to-repo'|'to-local'} direction - 同步方向
+ * @returns {Array<{label: string, status: string|null, src: string|null, dest: string, verboseSrc: string, verboseDest: string}>}
+ */
+function diffSyncItems(items, direction) {
+  const result = [];
+
+  for (const item of items) {
+    if (item.type === 'settings') {
+      // settings.json 需要去除裝置欄位後再比較
+      const localPath = path.join(CLAUDE_HOME, 'settings.json');
+      const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
+      let status = null;
+      let tmpSrc = null;
+      if (fs.existsSync(localPath)) {
+        const stripped = getStrippedSettings(localPath);
+        tmpSrc = path.join(os.tmpdir(), `sync-ai-settings-diff-${process.pid}.json`);
+        registerTempFile(tmpSrc);
+        fs.writeFileSync(tmpSrc, stripped);
+        if (!fs.existsSync(repoPath)) {
+          status = 'new';
+        } else if (fs.readFileSync(repoPath, 'utf8') !== stripped) {
+          status = 'changed';
+        }
+      }
+      result.push({
+        label: `claude/${item.label}`,
+        status,
+        src: tmpSrc,
+        dest: repoPath,
+        verboseSrc: localPath,
+        verboseDest: repoPath,
+      });
+    } else if (item.type === 'file') {
+      const status = diffFile(item.src, item.dest);
+      result.push({
+        label: `claude/${item.label}`,
+        status,
+        src: item.src,
+        dest: item.dest,
+        verboseSrc: item.verboseSrc,
+        verboseDest: item.verboseDest,
+      });
+    } else if (item.type === 'dir') {
+      const diffs = diffDir(item.src, item.dest);
+      for (const d of diffs) {
+        const src = path.join(item.src, d.rel);
+        const dest = path.join(item.dest, d.rel);
+        result.push({
+          label: `claude/${item.label}/${d.rel}`,
+          status: d.status,
+          src,
+          dest,
+          verboseSrc: src,
+          verboseDest: dest,
+        });
+      }
+      // 如果目錄無差異，不加入結果（和原 runDiff 行為一致：只有 file 型才顯示 ok）
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 執行同步（apply），回傳統計與變更日誌
+ * @param {SyncItem[]} items - 同步項目清單
+ * @param {'to-repo'|'to-local'} direction - 同步方向
+ * @param {{dryRun: boolean}} opts
+ * @returns {{stats: {added: number, updated: number, deleted: number}, changeLog: string[]}}
+ */
+function applySyncItems(items, direction, opts) {
+  const { dryRun } = opts;
+  const stats = { added: 0, updated: 0, deleted: 0 };
+  const changeLog = [];
+
+  for (const item of items) {
+    if (item.type === 'settings') {
+      if (mergeSettingsJson(direction, dryRun)) {
+        stats.updated++;
+        changeLog.push('settings.json (updated)');
+        printStatusLine('changed', 'settings.json');
+      }
+    } else if (item.type === 'file') {
+      const existed = fs.existsSync(item.dest);
+      if (copyFile(item.src, item.dest, true, dryRun)) {
+        const action = existed ? 'updated' : 'added';
+        stats[action]++;
+        changeLog.push(`${item.label} (${action})`);
+        printStatusLine(action === 'added' ? 'added' : 'changed', item.label);
+      }
+    } else if (item.type === 'dir') {
+      for (const c of mirrorDir(item.src, item.dest, [], true, dryRun)) {
+        stats[c.action]++;
+        changeLog.push(`${item.label}/${c.rel} (${c.action})`);
+        const iconType = c.action === 'added' ? 'added' : c.action === 'deleted' ? 'deleted' : 'changed';
+        printStatusLine(iconType, `${item.label}/${c.rel}`);
+      }
+    }
+  }
+
+  return { stats, changeLog };
+}
+
+/**
+ * 顯示 git 狀態（to-repo 完成後）
+ * @returns {void}
+ */
+function showGitStatus() {
+  if (!isGitAvailable()) {
+    console.log(col.yellow('  Git 不可用，跳過狀態顯示'));
+    return;
+  }
+  if (!isInsideGitRepo()) {
+    console.log(col.yellow('  不在 git repo 內，跳過狀態顯示'));
+    return;
+  }
+
+  const gitStatus = git(['status', '--short']);
+  if (!gitStatus.ok) {
+    console.log(col.yellow('  無法取得 git 狀態'));
+    return;
+  }
+
+  if (!gitStatus.stdout.trim()) {
+    console.log(col.green('  與 repo 完全一致，無變動'));
+    return;
+  }
+
+  console.log(col.bold('  Git 變動：\n'));
+  for (const line of gitStatus.stdout.trim().split('\n')) {
+    console.log('    ' + col.yellow(line));
+  }
+  const gitDiffResult = git(['diff', '--stat']);
+  if (gitDiffResult.ok && gitDiffResult.stdout.trim()) {
+    console.log('');
+    for (const line of gitDiffResult.stdout.trim().split('\n')) {
+      console.log('    ' + col.dim(line));
+    }
+  }
+  console.log('');
+  console.log(col.bold('  下一步：'));
+  console.log(col.dim('   git add -A && git commit -m "sync: from <hostname>" && git push'));
+}
+
+// =============================================================================
+// Section: Commands -- 各指令的實作
 // diff, to-repo, to-local, skills:diff, skills:add, help
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+
+/**
+ * 在 verbose 模式下輸出檔案完整路徑與大小
+ * @param {string} src - 來源路徑
+ * @param {string} dest - 目的路徑
+ * @returns {void}
+ */
+function logVerbosePaths(src, dest) {
+  const srcSize = fs.existsSync(src) ? fs.statSync(src).size : 0;
+  const destSize = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
+  console.log(col.dim(`      src:  ${src} (${srcSize} bytes)`));
+  console.log(col.dim(`      dest: ${dest} (${destSize} bytes)`));
+}
 
 /**
  * diff 指令：比對本機與 repo 的差異
@@ -768,73 +1086,44 @@ function appendSyncLog(direction, changes) {
 function runDiff(opts) {
   console.log(col.bold('\n  本機 vs repo 差異比對\n'));
 
-  // 收集所有比較項目
-  const items = [];
+  const items = buildSyncItems('to-repo');
+  const allDiffItems = diffSyncItems(items, 'to-repo');
 
-  // CLAUDE.md
-  {
-    const src = path.join(CLAUDE_HOME, 'CLAUDE.md');
-    const dest = path.join(REPO_ROOT, 'claude', 'CLAUDE.md');
-    items.push({ label: 'CLAUDE.md', src, dest, status: diffFile(src, dest), verboseSrc: src, verboseDest: dest });
-  }
-
-  // settings.json（去掉裝置欄位再比較）
-  let tmpSrc = null;
-  {
-    const localPath = path.join(CLAUDE_HOME, 'settings.json');
-    const dest = path.join(REPO_ROOT, 'claude', 'settings.json');
-    let status = null;
-    if (fs.existsSync(localPath)) {
-      const local = readJson(localPath);
-      for (const field of DEVICE_FIELDS) delete local[field];
-      const stripped = JSON.stringify(local, null, 2) + '\n';
-      tmpSrc = path.join(os.tmpdir(), `sync-ai-settings-diff-${process.pid}.json`);
-      registerTempFile(tmpSrc);
-      fs.writeFileSync(tmpSrc, stripped);
-      if (!fs.existsSync(dest)) {
-        status = 'new';
-      } else if (fs.readFileSync(dest, 'utf8') !== stripped) {
-        status = 'changed';
-      }
+  // 補上無差異的 file 項目（ok 狀態）
+  const fileItems = items.filter(i => i.type === 'file');
+  for (const fi of fileItems) {
+    const label = `claude/${fi.label}`;
+    if (!allDiffItems.some(d => d.label === label)) {
+      allDiffItems.push({
+        label,
+        status: null,
+        src: fi.src,
+        dest: fi.dest,
+        verboseSrc: fi.verboseSrc,
+        verboseDest: fi.verboseDest,
+      });
     }
-    items.push({ label: 'settings.json', src: tmpSrc, dest, status, verboseSrc: localPath, verboseDest: dest });
+  }
+  // settings.json 無差異也要顯示 ok
+  if (!allDiffItems.some(d => d.label === 'claude/settings.json')) {
+    const si = items.find(i => i.type === 'settings');
+    allDiffItems.push({
+      label: 'claude/settings.json',
+      status: null,
+      src: si.src,
+      dest: si.dest,
+      verboseSrc: si.verboseSrc,
+      verboseDest: si.verboseDest,
+    });
   }
 
-  // statusline.sh
-  {
-    const src = path.join(CLAUDE_HOME, 'statusline.sh');
-    const dest = path.join(REPO_ROOT, 'claude', 'statusline.sh');
-    items.push({ label: 'statusline.sh', src, dest, status: diffFile(src, dest), verboseSrc: src, verboseDest: dest });
-  }
-
-  // agents/
-  const agentDiffs = diffDir(
-    path.join(CLAUDE_HOME, 'agents'),
-    path.join(REPO_ROOT, 'claude', 'agents'),
-  );
-
-  // commands/
-  const commandDiffs = diffDir(
-    path.join(CLAUDE_HOME, 'commands'),
-    path.join(REPO_ROOT, 'claude', 'commands'),
-  );
-
-  const allDiffItems = [
-    ...items.map(i => ({
-      label: `claude/${i.label}`, status: i.status, src: i.src, dest: i.dest,
-      verboseSrc: i.verboseSrc, verboseDest: i.verboseDest,
-    })),
-    ...agentDiffs.map(d => {
-      const src = path.join(CLAUDE_HOME, 'agents', d.rel);
-      const dest = path.join(REPO_ROOT, 'claude', 'agents', d.rel);
-      return { label: `claude/agents/${d.rel}`, status: d.status, src, dest, verboseSrc: src, verboseDest: dest };
-    }),
-    ...commandDiffs.map(d => {
-      const src = path.join(CLAUDE_HOME, 'commands', d.rel);
-      const dest = path.join(REPO_ROOT, 'claude', 'commands', d.rel);
-      return { label: `claude/commands/${d.rel}`, status: d.status, src, dest, verboseSrc: src, verboseDest: dest };
-    }),
-  ];
+  // 排序：file 在前，dir 在後
+  allDiffItems.sort((a, b) => {
+    const aIsDir = a.label.includes('agents/') || a.label.includes('commands/');
+    const bIsDir = b.label.includes('agents/') || b.label.includes('commands/');
+    if (aIsDir !== bIsDir) return aIsDir ? 1 : -1;
+    return 0;
+  });
 
   let hasDiff = false;
   for (const item of allDiffItems) {
@@ -862,7 +1151,6 @@ function runDiff(opts) {
 
   // 詳細 diff
   console.log(col.bold('\n  -- 詳細差異 --'));
-
   for (const item of allDiffItems) {
     if (item.status === 'changed' && item.src && item.dest) {
       printFileDiff(item.src, item.dest, item.label);
@@ -882,24 +1170,12 @@ function runDiff(opts) {
 }
 
 /**
- * 在 verbose 模式下輸出檔案完整路徑與大小
- * @param {string} src - 來源路徑
- * @param {string} dest - 目的路徑
- */
-function logVerbosePaths(src, dest) {
-  const srcSize = fs.existsSync(src) ? fs.statSync(src).size : 0;
-  const destSize = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
-  console.log(col.dim(`      src:  ${src} (${srcSize} bytes)`));
-  console.log(col.dim(`      dest: ${dest} (${destSize} bytes)`));
-}
-
-/**
  * to-repo 指令：本機設定同步到 repo
  * @param {ParsedArgs} opts - CLI 引數
  * @returns {number} exit code
  */
 function runToRepo(opts) {
-  const dryRun = opts.dryRun;
+  const { dryRun } = opts;
 
   if (dryRun) {
     console.log(col.bold('\n  [dry-run] 本機 -> repo（不寫入任何檔案）\n'));
@@ -908,121 +1184,37 @@ function runToRepo(opts) {
   }
 
   // 檢查 git repo
-  if (!dryRun && !isInsideGitRepo()) {
-    if (isGitAvailable()) {
+  if (!dryRun) {
+    if (isGitAvailable() && !isInsideGitRepo()) {
       throw new SyncError('目前目錄不在 git repository 內', ERR.GIT_ERROR);
     }
   }
 
   isWriting = !dryRun;
-  const stats = { added: 0, updated: 0, deleted: 0 };
-  const changeLog = [];
-
   try {
-    // CLAUDE.md
-    {
-      const src = path.join(CLAUDE_HOME, 'CLAUDE.md');
-      const dest = path.join(REPO_ROOT, 'claude', 'CLAUDE.md');
-      const existed = fs.existsSync(dest);
-      if (copyFile(src, dest, true, dryRun)) {
-        const action = existed ? 'updated' : 'added';
-        stats[action]++;
-        changeLog.push(`CLAUDE.md (${action})`);
-        printStatusLine(action === 'added' ? 'added' : 'changed', 'CLAUDE.md');
-      }
+    const items = buildSyncItems('to-repo');
+    const { stats, changeLog } = applySyncItems(items, 'to-repo', opts);
+
+    console.log('');
+    printSummary(stats);
+
+    if (dryRun) {
+      console.log(col.dim('\n  以上為預覽，未實際寫入任何檔案'));
+      console.log('');
+      return EXIT_OK;
     }
 
-    // settings.json
-    if (mergeSettingsJson('to-repo', dryRun)) {
-      stats.updated++;
-      changeLog.push('settings.json (updated)');
-      printStatusLine('changed', 'settings.json');
+    if (changeLog.length > 0) {
+      appendSyncLog('to-repo', changeLog);
     }
 
-    // statusline.sh
-    {
-      const src = path.join(CLAUDE_HOME, 'statusline.sh');
-      const dest = path.join(REPO_ROOT, 'claude', 'statusline.sh');
-      const existed = fs.existsSync(dest);
-      if (copyFile(src, dest, true, dryRun)) {
-        const action = existed ? 'updated' : 'added';
-        stats[action]++;
-        changeLog.push(`statusline.sh (${action})`);
-        printStatusLine(action === 'added' ? 'added' : 'changed', 'statusline.sh');
-      }
-    }
-
-    // agents/
-    for (const c of mirrorDir(
-      path.join(CLAUDE_HOME, 'agents'),
-      path.join(REPO_ROOT, 'claude', 'agents'),
-      [], true, dryRun
-    )) {
-      stats[c.action]++;
-      changeLog.push(`agents/${c.rel} (${c.action})`);
-      const iconType = c.action === 'added' ? 'added' : c.action === 'deleted' ? 'deleted' : 'changed';
-      printStatusLine(iconType, `agents/${c.rel}`);
-    }
-
-    // commands/
-    for (const c of mirrorDir(
-      path.join(CLAUDE_HOME, 'commands'),
-      path.join(REPO_ROOT, 'claude', 'commands'),
-      [], true, dryRun
-    )) {
-      stats[c.action]++;
-      changeLog.push(`commands/${c.rel} (${c.action})`);
-      const iconType = c.action === 'added' ? 'added' : c.action === 'deleted' ? 'deleted' : 'changed';
-      printStatusLine(iconType, `commands/${c.rel}`);
-    }
+    console.log('');
+    showGitStatus();
+    console.log('');
   } finally {
     isWriting = false;
   }
 
-  console.log('');
-  printSummary(stats);
-
-  if (dryRun) {
-    console.log(col.dim('\n  以上為預覽，未實際寫入任何檔案'));
-    console.log('');
-    return EXIT_OK;
-  }
-
-  // 寫入操作日誌
-  if (changeLog.length > 0) {
-    appendSyncLog('to-repo', changeLog);
-  }
-
-  // 顯示 git status
-  console.log('');
-  if (!isGitAvailable()) {
-    console.log(col.yellow('  Git 不可用，跳過狀態顯示'));
-  } else if (!isInsideGitRepo()) {
-    console.log(col.yellow('  不在 git repo 內，跳過狀態顯示'));
-  } else {
-    const gitStatus = git(['status', '--short']);
-    if (!gitStatus.ok) {
-      console.log(col.yellow('  無法取得 git 狀態'));
-    } else if (gitStatus.stdout.trim()) {
-      console.log(col.bold('  Git 變動：\n'));
-      for (const line of gitStatus.stdout.trim().split('\n')) {
-        console.log('    ' + col.yellow(line));
-      }
-      const gitDiffResult = git(['diff', '--stat']);
-      if (gitDiffResult.ok && gitDiffResult.stdout.trim()) {
-        console.log('');
-        for (const line of gitDiffResult.stdout.trim().split('\n')) {
-          console.log('    ' + col.dim(line));
-        }
-      }
-      console.log('');
-      console.log(col.bold('  下一步：'));
-      console.log(col.dim('   git add -A && git commit -m "sync: from <hostname>" && git push'));
-    } else {
-      console.log(col.green('  與 repo 完全一致，無變動'));
-    }
-  }
-  console.log('');
   return EXIT_OK;
 }
 
@@ -1032,7 +1224,7 @@ function runToRepo(opts) {
  * @returns {Promise<number>} exit code
  */
 async function runToLocal(opts) {
-  const dryRun = opts.dryRun;
+  const { dryRun } = opts;
 
   if (dryRun) {
     console.log(col.bold('\n  [dry-run] repo -> 本機（不寫入任何檔案）\n'));
@@ -1040,66 +1232,18 @@ async function runToLocal(opts) {
     console.log(col.bold('\n  repo -> 本機\n'));
   }
 
-  // 預覽
+  // 預覽：使用 applySyncItems dry-run 模式取得預覽
+  const items = buildSyncItems('to-local');
+
+  // 先用 diff 取得預覽
   if (!dryRun) console.log('  預覽（尚未套用）：\n');
 
-  const preview = [];
+  // 用 applySyncItems dry-run 來取得預覽
+  const preview = applySyncItems(items, 'to-local', { dryRun: true });
 
-  const claudeStatus = diffFile(
-    path.join(REPO_ROOT, 'claude', 'CLAUDE.md'),
-    path.join(CLAUDE_HOME, 'CLAUDE.md'),
-  );
-  if (claudeStatus) preview.push({ label: '~/.claude/CLAUDE.md', status: claudeStatus });
-
-  // settings.json
-  {
-    const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
-    const localPath = path.join(CLAUDE_HOME, 'settings.json');
-    if (fs.existsSync(repoPath)) {
-      const repo = readJson(repoPath);
-      const local = fs.existsSync(localPath) ? readJson(localPath) : {};
-      const localClean = { ...local };
-      for (const field of DEVICE_FIELDS) delete localClean[field];
-      const repoStr = JSON.stringify(repo, null, 2);
-      const localStr = JSON.stringify(localClean, null, 2);
-      if (repoStr !== localStr) {
-        preview.push({
-          label: '~/.claude/settings.json',
-          status: fs.existsSync(localPath) ? 'changed' : 'new',
-        });
-      }
-    }
-  }
-
-  const statuslineStatus = diffFile(
-    path.join(REPO_ROOT, 'claude', 'statusline.sh'),
-    path.join(CLAUDE_HOME, 'statusline.sh'),
-  );
-  if (statuslineStatus) preview.push({ label: '~/.claude/statusline.sh', status: statuslineStatus });
-
-  for (const d of diffDir(
-    path.join(REPO_ROOT, 'claude', 'agents'),
-    path.join(CLAUDE_HOME, 'agents'),
-  )) preview.push({ label: `~/.claude/agents/${d.rel}`, status: d.status });
-
-  for (const d of diffDir(
-    path.join(REPO_ROOT, 'claude', 'commands'),
-    path.join(CLAUDE_HOME, 'commands'),
-  )) preview.push({ label: `~/.claude/commands/${d.rel}`, status: d.status });
-
-  if (preview.length === 0) {
+  if (preview.stats.added + preview.stats.updated + preview.stats.deleted === 0) {
     console.log(col.green('  本機與 repo 完全一致，無需套用\n'));
     return EXIT_OK;
-  }
-
-  for (const p of preview) {
-    if (p.status === 'new') {
-      printStatusLine('added', p.label);
-    } else if (p.status === 'deleted') {
-      printStatusLine('deleted', p.label);
-    } else {
-      printStatusLine('changed', p.label);
-    }
   }
 
   if (dryRun) {
@@ -1115,76 +1259,31 @@ async function runToLocal(opts) {
   }
   console.log('');
 
-  // 套用
+  // 實際套用
   isWriting = true;
-  const stats = { added: 0, updated: 0, deleted: 0 };
-  const changeLog = [];
-
   try {
-    {
-      const src = path.join(REPO_ROOT, 'claude', 'CLAUDE.md');
-      const dest = path.join(CLAUDE_HOME, 'CLAUDE.md');
-      const existed = fs.existsSync(dest);
-      if (copyFile(src, dest, true)) {
-        const action = existed ? 'updated' : 'added';
-        stats[action]++;
-        changeLog.push(`CLAUDE.md (${action})`);
-      }
-    }
+    const { stats, changeLog } = applySyncItems(items, 'to-local', { dryRun: false });
 
-    if (mergeSettingsJson('to-local')) {
-      stats.updated++;
-      changeLog.push('settings.json (updated)');
-    }
+    console.log('  同步完成：\n');
+    printSummary(stats);
 
-    {
-      const src = path.join(REPO_ROOT, 'claude', 'statusline.sh');
-      const dest = path.join(CLAUDE_HOME, 'statusline.sh');
-      const existed = fs.existsSync(dest);
-      if (copyFile(src, dest, true)) {
-        const action = existed ? 'updated' : 'added';
-        stats[action]++;
-        changeLog.push(`statusline.sh (${action})`);
-      }
-    }
-
-    for (const c of mirrorDir(
-      path.join(REPO_ROOT, 'claude', 'agents'),
-      path.join(CLAUDE_HOME, 'agents'),
-      [], true,
-    )) {
-      stats[c.action]++;
-      changeLog.push(`agents/${c.rel} (${c.action})`);
-    }
-
-    for (const c of mirrorDir(
-      path.join(REPO_ROOT, 'claude', 'commands'),
-      path.join(CLAUDE_HOME, 'commands'),
-      [], true,
-    )) {
-      stats[c.action]++;
-      changeLog.push(`commands/${c.rel} (${c.action})`);
+    if (changeLog.length > 0) {
+      console.log('');
+      for (const ch of changeLog) console.log(`    ${ch}`);
+      appendSyncLog('to-local', changeLog);
     }
   } finally {
     isWriting = false;
   }
 
-  console.log('  同步完成：\n');
-  printSummary(stats);
-
-  if (changeLog.length > 0) {
-    console.log('');
-    for (const ch of changeLog) console.log(`    ${ch}`);
-    appendSyncLog('to-local', changeLog);
-  }
   console.log('');
   return EXIT_OK;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Skills Handler — Skills 管理指令
+// =============================================================================
+// Section: Skills Handler -- Skills 管理指令
 // skills:diff 與 skills:add 的實作
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * skills:diff 指令：比對本機與 repo 的 skills 差異
@@ -1217,22 +1316,10 @@ function runSkillsDiff() {
     return EXIT_OK;
   }
 
-  // 一致的
-  for (const name of inBoth) {
-    printStatusLine('ok', name);
-  }
+  for (const name of inBoth)      printStatusLine('ok', name);
+  for (const name of onlyInRepo)  printStatusLine('down', name, 'repo 有、本機未安裝');
+  for (const name of onlyInLocal) printStatusLine('up', name, '本機有、repo 未記錄');
 
-  // repo 有、本機沒裝
-  for (const name of onlyInRepo) {
-    printStatusLine('down', name, 'repo 有、本機未安裝');
-  }
-
-  // 本機有、repo 沒記錄
-  for (const name of onlyInLocal) {
-    printStatusLine('up', name, '本機有、repo 未記錄');
-  }
-
-  // 建議指令
   if (onlyInRepo.length > 0) {
     console.log(col.bold('\n  -- 安裝缺少的 skills --'));
     for (const name of onlyInRepo) {
@@ -1256,11 +1343,12 @@ function runSkillsDiff() {
 
 /**
  * skills:add 指令：新增 skill 到 skills-lock.json
+ * @param {ParsedArgs} opts - CLI 引數
  * @returns {number} exit code
  */
-function runSkillsAdd() {
-  const arg1 = process.argv[3];
-  const arg2 = process.argv[4];
+function runSkillsAdd(opts) {
+  const arg1 = opts.extraArgs[0];
+  const arg2 = opts.extraArgs[1];
 
   let name, source;
 
@@ -1324,6 +1412,7 @@ function runSkillsAdd() {
 
 /**
  * help 指令：顯示所有可用指令與說明
+ * @returns {void}
  */
 function runHelp() {
   const pkg = readPackageJson();
@@ -1333,12 +1422,12 @@ function runHelp() {
   console.log(col.dim('  跨裝置 Claude Code 設定同步工具\n'));
 
   console.log(col.bold('  指令：'));
-  console.log(`    ${col.cyan('diff')}          ${col.dim('(d)')}     比對本機與 repo 差異`);
-  console.log(`    ${col.cyan('to-repo')}       ${col.dim('(tr)')}    本機設定 -> repo`);
-  console.log(`    ${col.cyan('to-local')}      ${col.dim('(tl)')}    repo 設定 -> 本機`);
-  console.log(`    ${col.cyan('skills:diff')}   ${col.dim('(sd)')}    比對 skills 差異`);
-  console.log(`    ${col.cyan('skills:add')}    ${col.dim('(sa)')}    新增 skill 到 skills-lock.json`);
-  console.log(`    ${col.cyan('help')}                   顯示此說明`);
+  for (const [cmd, def] of Object.entries(COMMANDS)) {
+    const aliasStr = def.alias ? col.dim(`(${def.alias})`) : '';
+    const pad = ' '.repeat(Math.max(1, 14 - cmd.length));
+    const aliasPad = aliasStr ? ' '.repeat(Math.max(1, 8 - (def.alias || '').length - 2)) : ' '.repeat(8);
+    console.log(`    ${col.cyan(cmd)}${pad}${aliasStr}${aliasPad}${def.desc}`);
+  }
 
   console.log(col.bold('\n  旗標：'));
   console.log(`    ${col.cyan('--dry-run')}              預覽操作，不實際寫入`);
@@ -1353,10 +1442,10 @@ function runHelp() {
   console.log('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: CLI Parser — 命令列引數解析
+// =============================================================================
+// Section: CLI Parser -- 命令列引數解析
 // 集中解析所有 CLI 引數與旗標
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * @typedef {Object} ParsedArgs
@@ -1365,6 +1454,7 @@ function runHelp() {
  * @property {boolean} verbose - 是否為 verbose 模式
  * @property {boolean} showVersion - 是否顯示版本
  * @property {boolean} showHelp - 是否顯示 help
+ * @property {string[]} extraArgs - 指令之後的額外 positional 引數
  */
 
 /**
@@ -1379,7 +1469,10 @@ function parseArgs() {
     verbose: false,
     showVersion: false,
     showHelp: false,
+    extraArgs: [],
   };
+
+  let commandFound = false;
 
   for (const arg of args) {
     if (arg === '--dry-run') {
@@ -1390,37 +1483,42 @@ function parseArgs() {
       result.showVersion = true;
     } else if (arg === '--help' || arg === '-h') {
       result.showHelp = true;
-    } else if (!arg.startsWith('--') && result.command === null) {
-      // 解析指令（含別名）
-      const resolved = COMMAND_ALIASES[arg] || arg;
-      if (VALID_COMMANDS.includes(resolved)) {
-        result.command = resolved;
+    } else if (!arg.startsWith('--')) {
+      if (!commandFound) {
+        // 第一個 positional arg 是指令
+        const resolved = COMMAND_ALIASES[arg] || arg;
+        if (VALID_COMMANDS.includes(resolved)) {
+          result.command = resolved;
+        } else {
+          result.command = arg; // 保留原值，由 main() 處理錯誤
+        }
+        commandFound = true;
       } else {
-        result.command = arg; // 保留原值，由 main() 處理錯誤
+        // 指令之後的 positional args
+        result.extraArgs.push(arg);
       }
     }
-    // skills:add 的額外引數由 runSkillsAdd 自行處理
   }
 
   return result;
 }
 
 /**
- * 讀取 package.json（不丟出錯誤）
+ * 讀取 package.json（使用 readJson，不丟出錯誤）
  * @returns {Record<string, unknown>|null}
  */
 function readPackageJson() {
   const pkgPath = path.join(REPO_ROOT, 'package.json');
   try {
-    return JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return readJson(pkgPath);
   } catch (_) {
     return null;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Interactive — 互動確認
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// Section: Interactive -- 互動確認
+// =============================================================================
 
 /**
  * 向使用者提問並等待確認
@@ -1437,13 +1535,14 @@ function askConfirm(question) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Section: Main — 程式進入點
+// =============================================================================
+// Section: Main -- 程式進入點
 // 根據 CLI 引數分派到對應指令
-// ═══════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /**
  * 主函式：解析引數、分派指令、統一錯誤處理
+ * @returns {Promise<void>}
  */
 async function main() {
   const opts = parseArgs();
@@ -1492,7 +1591,7 @@ async function main() {
       exitCode = runSkillsDiff();
       break;
     case 'skills:add':
-      exitCode = runSkillsAdd();
+      exitCode = runSkillsAdd(opts);
       break;
   }
 
