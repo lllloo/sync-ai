@@ -68,5 +68,6 @@
   },
   "language": "繁體中文",
   "spinnerTipsEnabled": false,
-  "autoUpdatesChannel": "latest"
+  "autoUpdatesChannel": "latest",
+  "skipDangerousModePermissionPrompt": true
 }
