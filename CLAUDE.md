@@ -63,6 +63,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Bash 規則**（來自全域 CLAUDE.md）：禁用 `$()` 命令替換；禁擅自執行 `npm run build`。
 - **嚴禁洩漏敏感資訊**：輸出、log、diff 內容中不得出現 API Key、token 或完整使用者路徑。
 
+## Agents 管理
+
+`claude/agents/` 以 package 子目錄組織，來源優先順序：
+
+1. **`everything-claude-code/`**（主要）— 來自 `affaan-m/everything-claude-code`
+2. **`awesome-claude-code-subagents/`**（補充）— 來自 `VoltAgent/awesome-claude-code-subagents`，依分類子目錄組織（`categories/01-core-development/` 等），僅安裝 `everything-claude-code` 未涵蓋的功能
+
+**新增 agent 的方式**（用 `gh` 抓原始內容）：
+```bash
+# 從 everything-claude-code
+gh api repos/affaan-m/everything-claude-code/contents/agents/<name>.md --jq '.content' | base64 -d > claude/agents/everything-claude-code/<name>.md
+
+# 從 awesome-claude-code-subagents（需指定分類路徑）
+gh api "repos/VoltAgent/awesome-claude-code-subagents/contents/categories/<category>/<name>.md" --jq '.content' | base64 -d > claude/agents/awesome-claude-code-subagents/<name>.md
+```
+
 ## 注意事項
 
 - `.agents/`（skill 實體）、`.sync-history.log`、`.DS_Store` 皆在 `.gitignore`
