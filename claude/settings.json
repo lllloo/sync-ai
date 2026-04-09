@@ -45,29 +45,8 @@
     "type": "command",
     "command": "bash ~/.claude/statusline.sh"
   },
-  "enabledPlugins": {
-    "obsidian@obsidian-skills": true
-  },
-  "extraKnownMarketplaces": {
-    "claude-code-workflows": {
-      "source": {
-        "source": "github",
-        "repo": "wshobson/agents"
-      }
-    },
-    "everything-claude-code": {
-      "source": {
-        "source": "github",
-        "repo": "affaan-m/everything-claude-code"
-      }
-    },
-    "obsidian-skills": {
-      "source": {
-        "source": "github",
-        "repo": "kepano/obsidian-skills"
-      }
-    }
-  },
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {},
   "language": "繁體中文",
   "spinnerTipsEnabled": false,
   "autoUpdatesChannel": "latest",
