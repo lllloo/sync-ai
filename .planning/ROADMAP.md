@@ -27,7 +27,10 @@
   3. 報告確認 dry-run 模式下零寫入（無任何檔案被建立或修改）
   4. 報告確認 skills:diff 只輸出建議指令，不執行安裝或移除
   5. 報告確認 status 指令同時顯示 diff 與 skills:diff 的完整輸出
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — 驗證 FUNC-01~FUNC-10 指令功能正確性，產出 01-REPORT.md
 
 ### Phase 2: 邊界與錯誤處理驗證
 **Goal**: 確認所有錯誤路徑產生正確的 SyncError 並且路徑不洩漏
@@ -72,7 +75,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 指令功能正確性驗證 | 0/TBD | Not started | - |
+| 1. 指令功能正確性驗證 | 0/1 | Planning complete | - |
 | 2. 邊界與錯誤處理驗證 | 0/TBD | Not started | - |
 | 3. 跨平台相容性評估 | 0/TBD | Not started | - |
 | 4. 測試覆蓋缺口分析與報告組裝 | 0/TBD | Not started | - |
