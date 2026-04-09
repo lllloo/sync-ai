@@ -833,15 +833,36 @@ function printSummary(stats) {
 // =============================================================================
 
 /**
+ * 將 settings 物件序列化為 JSON 字串（含結尾換行），與 writeJsonSafe 對齊
+ * 唯一序列化入口，確保 to-repo / to-local / diff 三條路徑的比對結果一致
+ * @param {Record<string, unknown>} obj
+ * @returns {string}
+ */
+function serializeSettings(obj) {
+  return JSON.stringify(obj, null, 2) + '\n';
+}
+
+/**
+ * 將 settings.json 去除裝置欄位後回傳 { clean, serialized }
+ * @param {string} filePath - settings.json 路徑
+ * @returns {{ clean: Record<string, unknown>, serialized: string } | null} 檔案不存在時回傳 null
+ */
+function loadStrippedSettings(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const data = readJson(filePath);
+  for (const field of DEVICE_FIELDS) delete data[field];
+  return { clean: data, serialized: serializeSettings(data) };
+}
+
+/**
  * 將 settings.json 去除裝置欄位後產生 stripped JSON 字串
+ * （保留為向後相容介面，內部委派給 loadStrippedSettings）
  * @param {string} filePath - settings.json 路徑
  * @returns {string|null} stripped JSON 字串，檔案不存在時回傳 null
  */
 function getStrippedSettings(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  const data = readJson(filePath);
-  for (const field of DEVICE_FIELDS) delete data[field];
-  return JSON.stringify(data, null, 2) + '\n';
+  const result = loadStrippedSettings(filePath);
+  return result ? result.serialized : null;
 }
 
 /**
@@ -856,26 +877,23 @@ function mergeSettingsJson(direction, dryRun = false) {
   const repoPath = path.join(REPO_ROOT, 'claude', 'settings.json');
 
   if (direction === 'to-repo') {
-    const strippedLocal = getStrippedSettings(localPath);
-    if (strippedLocal === null) return false;
+    const stripped = loadStrippedSettings(localPath);
+    if (stripped === null) return false;
 
-    // 比對 stripped local 與 repo 內容
     const repoContent = fs.existsSync(repoPath)
       ? fs.readFileSync(repoPath, 'utf8')
       : null;
-    if (repoContent === strippedLocal) return false;
+    if (repoContent === stripped.serialized) return false;
 
     if (dryRun) return true;
-    const local = readJson(localPath);
-    for (const field of DEVICE_FIELDS) delete local[field];
-    writeJsonSafe(repoPath, local);
+    writeJsonSafe(repoPath, stripped.clean);
     return true;
   } else {
     if (!fs.existsSync(repoPath)) return false;
     const repo = readJson(repoPath);
-    const repoStr = JSON.stringify(repo, null, 2);
+    const repoStr = serializeSettings(repo);
 
-    // 比對 repo 與 stripped local
+    // 比對 repo 與 stripped local（兩邊皆使用 serializeSettings 確保結尾換行對稱）
     const local = fs.existsSync(localPath) ? readJson(localPath) : {};
     const deviceValues = {};
     for (const field of DEVICE_FIELDS) {
@@ -883,8 +901,7 @@ function mergeSettingsJson(direction, dryRun = false) {
     }
     const localClean = { ...local };
     for (const field of DEVICE_FIELDS) delete localClean[field];
-    const localStr = JSON.stringify(localClean, null, 2);
-    if (repoStr === localStr) return false;
+    if (repoStr === serializeSettings(localClean)) return false;
 
     if (dryRun) return true;
     writeJsonSafe(localPath, { ...repo, ...deviceValues });
@@ -1169,8 +1186,8 @@ function showGitStatus() {
 function logVerbosePaths(src, dest) {
   const srcSize = fs.existsSync(src) ? fs.statSync(src).size : 0;
   const destSize = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
-  console.log(col.dim(`      src:  ${src} (${srcSize} bytes)`));
-  console.log(col.dim(`      dest: ${dest} (${destSize} bytes)`));
+  console.log(col.dim(`      src:  ${toRelativePath(src)} (${srcSize} bytes)`));
+  console.log(col.dim(`      dest: ${toRelativePath(dest)} (${destSize} bytes)`));
 }
 
 /**
@@ -1786,6 +1803,10 @@ if (require.main === module) {
     parseSkillSource,
     parseArgs,
     toRelativePath,
+    serializeSettings,
+    loadStrippedSettings,
+    getStrippedSettings,
+    DEVICE_FIELDS,
     SyncError,
     ERR,
     EXIT_OK,

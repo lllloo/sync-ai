@@ -9,7 +9,7 @@
     "skills:add": "node sync.js skills:add",
     "to-repo": "node sync.js to-repo",
     "to-local": "node sync.js to-local",
-    "test": "node --test test/sync.test.js"
+    "test": "node --test test/sync.test.js test/settings.test.js"
   },
   "private": true
 }
