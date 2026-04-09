@@ -1,144 +1,261 @@
-# Codebase Concerns
+# 技術債與關注領域
 
-**Analysis Date:** 2026-04-07
+**分析日期：** 2026-04-09
 
-## Tech Debt
+## 技術債
 
-**Large file diff performance degradation:**
-- Issue: Files larger than 2000 lines (m+n combined) trigger `computeSimpleLineDiff()` which produces approximate diffs using Set-based line comparison, losing position information for repeated lines.
-- Files: `sync.js` (lines 625-665, 674-693)
-- Impact: Users cannot trust diff output for large files—reordered duplicate lines appear as deletions+additions even if logically unchanged. This can mask real changes or create false alarm diffs when syncing large config files.
-- Fix approach: Implement a sliding-window O(n) diff algorithm or pre-process large files to detect repeated lines at the set level (e.g., group by content hash). Consider increasing `LCS_MAX_LINES` threshold after performance testing with actual config sizes.
+### writeJsonSafe 檔案寫入的 checkWriteAccess 時序問題
 
-**Unchecked file read errors in sync operations:**
-- Issue: `copyFile()`, `mirrorDir()`, and `diffFile()` / `diffDir()` do NOT wrap `readFileSync()` calls with try-catch. If a file becomes inaccessible between the existence check and the read (TOCTOU race condition), the sync crashes with an unhandled exception.
-- Files: `sync.js` (lines 406, 411, 415, 481, 486-487, 584, 607-608)
-- Impact: On Windows or network filesystems, file permissions can change during sync. A crash mid-sync leaves the working directory in an inconsistent state. For `to-local` sync, `isWriting` flag is set but error bypasses `finally` block recovery.
-- Fix approach: Wrap all `readFileSync()` calls in `copyFile()` and `mirrorDir()` (lines 481, 486-487) with `checkReadAccess()` immediately before reading. For `diffFile()`/`diffDir()`, gracefully treat read-failed files as "changed" and log a warning. In `mirrorDir()`, move line 481's read inside a try-catch that treats read errors as requiring write.
+**問題：** `writeJsonSafe()` 在 `sync.js` 第 364 行會檢查目標檔案的寫入權限，但對於不存在的檔案，`checkWriteAccess()` 會試圖用 `fs.accessSync(filePath, fs.constants.W_OK)` 檢查權限。在某些系統上，對不存在檔案的權限檢查行為不一致（例如 Windows 與 POSIX 系統差異）。
 
-**Fragile readline interface in confirmation prompt:**
-- Issue: `askConfirm()` creates a readline interface without explicit error handling or timeout. If stdin closes or hangs, the interface never resolves, blocking the process indefinitely.
-- Files: `sync.js` (lines 1660-1668)
-- Impact: Interactive `to-local` sync can hang forever on automation servers (CI/CD with no TTY) or if stdin connection drops. User must force-kill the process.
-- Fix approach: Add a `setTimeout()` with 30-second limit that rejects the promise with a SyncError. Validate that `process.stdin.isTTY` is true before attempting interactive prompts; throw error if non-TTY.
+**檔案：** `sync.js` 行 363-383
 
-## Known Bugs
+**影響：** 
+- 建立新的 JSON 檔案可能在某些環境中誤判為權限錯誤
+- 雖然 `ensureDir()` 會先建立目錄，但檔案本身仍不存在
 
-**Potential data loss in atomic write fallback:**
-- Symptoms: If `fs.renameSync()` fails with EXDEV (cross-device link), code falls back to direct `fs.writeFileSync()` without the atomic guarantee. A power loss during the fallback write can corrupt the target file.
-- Files: `sync.js` (lines 362-382)
-- Trigger: Running sync across mount points (e.g., external USB drive to internal SSD on Windows, or NFS to local filesystem on macOS).
-- Workaround: Use the `--dry-run` flag first to test the sync before committing data on cross-device targets.
-- Fix approach: Implement cross-device fallback using write-to-sibling + rename pattern (write to a temp in the same directory as dest, then rename). If not possible, create a distinct error message warning user to retry after moving files to same mount point.
-
-**Signal handler race condition:**
-- Symptoms: If SIGINT arrives while `isWriting` is true but before the try-catch sets it false, the signal prints "同步中斷" but the handler exits via `process.kill()` before cleanup fully completes.
-- Files: `sync.js` (lines 256-267, 1360-1374)
-- Trigger: User presses Ctrl+C during active write to filesystem.
-- Impact: Low-risk in practice (cleanup is synchronous), but race window exists.
-- Fix approach: Make `isWriting` flag flip atomic by using a finally block in the signal handler, or use `process.exitCode = code; process.exit()` pattern instead of `process.kill()`.
-
-## Security Considerations
-
-**User home directory exposure in error messages:**
-- Risk: `toRelativePath()` attempts to mask HOME with `~/`, but error context values bypass this masking in some paths. If a user shares error output, relative paths might still contain username on Windows (e.g., `Users\RoyXXX\...`).
-- Files: `sync.js` (lines 175-183, 196-209)
-- Current mitigation: `toRelativePath()` masks `~` in path strings; `formatError()` calls `toRelativePath()` for context fields.
-- Recommendations: Add a second pass in `formatError()` to post-process all string context values through `toRelativePath()`. Add a log level (--quiet mode) that suppresses context output entirely for CI/CD use.
-
-**JSON injection via settings.json device fields:**
-- Risk: If `DEVICE_FIELDS` constant is modified to exclude fewer fields, a user could commit sensitive values (API keys, tokens) to the repo in `settings.json` and sync them to other machines.
-- Files: `sync.js` (lines 31-32, 839-892)
-- Current mitigation: Hard-coded `DEVICE_FIELDS = ['model', 'effortLevel']` limits what can leak; settings are stripped before writing to repo.
-- Recommendations: Add a validation step in `mergeSettingsJson()` to scan the local settings for known secret patterns (e.g., keys starting with `sk_`, `pk_`) and warn user before stripping. Document in README that any sensitive field MUST be added to `DEVICE_FIELDS`.
-
-## Performance Bottlenecks
-
-**Inefficient directory traversal in mirrorDir / getFiles:**
-- Problem: `getFiles()` is called for both source and destination in `mirrorDir()` (lines 474-475, 499), leading to double-traversal if dest is large. Each `getFiles()` call recurses fully even if the directory is unchanged.
-- Files: `sync.js` (lines 428-450, 469-509)
-- Cause: No caching between getFiles calls; no lazy evaluation.
-- Improvement path: Cache results of `getFiles(dest)` in the initial `mirrorDir()` call, reuse in the second loop. For frequently-synced large agent directories, consider a hash-of-hashes approach (directory content checksum) to skip unnecessary comparisons.
-
-**Synchronous string processing for large files:**
-- Problem: `computeLineDiff()` for files near 2000 lines will allocate a (1000 × 1000) DP table (~4MB as documented), blocking the event loop.
-- Files: `sync.js` (lines 625-665)
-- Cause: No async processing; Node.js default is synchronous fs + compute.
-- Improvement path: For files >2000 lines, use `computeSimpleLineDiff()` by default (which is already O(n)). Reserve full LCS only for explicitly requested detailed diffs via a `--detailed-diff` flag.
-
-## Fragile Areas
-
-**Settings.json merge logic complexity:**
-- Files: `sync.js` (lines 839-892)
-- Why fragile: `mergeSettingsJson()` has three separate code paths (to-repo with/without changes, to-local with repo/without repo). Each path computes stripped JSON differently (some use `getStrippedSettings()`, some inline). String comparison mixes JSON.stringify outputs and fs reads, making it error-prone if JSON formatting changes.
-- Safe modification: Refactor to a single `compareSettingsJson(local, repo, direction)` function that computes both sides once, returns a structured diff object, then applies conditionally.
-- Test coverage: No unit test for `mergeSettingsJson()` (it's a complex function with side effects). Add at least one test: "to-repo strips DEVICE_FIELDS but preserves other settings".
-
-**Global state in isWriting flag:**
-- Files: `sync.js` (lines 248, 1360, 1373, 258)
-- Why fragile: `isWriting` is a global boolean with no mutex; if two concurrent CLI invocations run (possible in automation), they can interfere. Also, the flag is set only around `applySyncItems()`, so signal during `confirmAndApply()` interactive prompt doesn't set it, leading to no warning if user Ctrl+Cs during prompt.
-- Safe modification: If concurrency is never intended, add a process-wide lock file (`.sync-ai.lock`) at startup and release at exit. If concurrency must be supported, use file-based locking. For interactivity, set `isWriting = true` at the start of `confirmAndApply()`.
-- Test coverage: No test for signal handling or interactivity. Manual smoke test required.
-
-**Hardcoded path constants:**
-- Files: `sync.js` (lines 25-29)
-- Why fragile: `CLAUDE_HOME = path.join(HOME, '.claude')` and `AGENTS_HOME = path.join(HOME, '.agents')` are hardcoded. If user's config directory differs (e.g., custom XDG_CONFIG_HOME on Linux), sync silently syncs to wrong location.
-- Safe modification: Add environment variable fallback: `CLAUDE_HOME = process.env.CLAUDE_HOME || path.join(HOME, '.claude')`. Document in README.
-- Test coverage: No test with different HOME or CLAUDE_HOME values.
-
-## Scaling Limits
-
-**Directory recursion depth:**
-- Current capacity: `getFiles()` and `cleanEmptyDirs()` use unbounded recursion. If user has agents with 100+ levels of nesting, stack overflow is possible.
-- Limit: Node.js default stack is ~1000 frames; nesting >500 levels will crash.
-- Scaling path: Convert `cleanEmptyDirs()` to iterative using a queue. For `getFiles()`, add a depth limit parameter (default 20) with a warning log if exceeded.
-
-**Settings.json file size:**
-- Current capacity: Entire settings.json is loaded into memory as a JS object. On typical machines, this is <1MB (no issue).
-- Limit: If settings.json grows to >50MB (unlikely but possible in automated test suites), JSON.parse/stringify will stall.
-- Scaling path: For very large settings, implement streaming JSON parser or chunked merge. For now, add a size check: if settings.json >5MB, warn user and skip sync.
-
-## Dependencies at Risk
-
-**No external dependencies (positive):**
-- Risk: None—project uses only Node.js built-ins. No version lock issues.
-- Impact: Low maintenance burden.
-- Migration plan: If future features require external libraries (e.g., chalk for colors), carefully evaluate cost vs. benefit. Currently, ANSI codes are manually implemented.
-
-## Missing Critical Features
-
-**No transactional multi-file sync:**
-- Problem: If `to-local` partially fails (e.g., syncs agents but crashes before settings), the working directory is inconsistent. User must manually revert or re-run.
-- Blocks: Users cannot safely sync in high-stakes environments (e.g., critical Claude Code config on production machines).
-- Fix approach: Implement rollback mechanism: collect all changes into a manifest, apply all-or-nothing. If any write fails, restore from manifest and exit with error. Requires more complex bookkeeping but improves reliability.
-
-**No bandwidth/throttling for large syncs:**
-- Problem: Syncing 1000+ agent files over slow networks (e.g., cellular) can timeout or be killed by network layer.
-- Blocks: Use on very large agent libraries with slow connections.
-- Fix approach: Add `--chunk-size` flag to limit files synced per batch. Show progress bar for long-running operations.
-
-## Test Coverage Gaps
-
-**No integration tests for actual sync operations:**
-- What's not tested: `applySyncItems()`, `copyFile()`, `mirrorDir()`, `mergeSettingsJson()` (side-effecting functions). Only pure functions like `computeLineDiff()` are tested.
-- Files: `test/sync.test.js` (198 lines total); `sync.js` (1757 lines)
-- Risk: Critical bugs in file sync logic could ship undetected. E.g., a typo in `copyFile()` that deletes instead of copies would only be caught by manual testing.
-- Priority: **High** — add at least smoke tests for:
-  1. `to-repo` creates files in repo directory
-  2. `to-local` applies files to local directory
-  3. `to-repo --dry-run` does NOT modify repo
-  4. `settings.json` DEVICE_FIELDS are correctly stripped
-
-**No error recovery tests:**
-- What's not tested: Behavior when disk is full, permission denied, file locked, network timeout (if NFS is used).
-- Risk: Error messages may be confusing or error handling may fail (e.g., cleanup not triggered).
-- Priority: **Medium** — add tests for permission errors, file access races.
-
-**No test for SIGINT/SIGTERM signal handling:**
-- What's not tested: Pressing Ctrl+C during sync properly cleans up temp files and doesn't corrupt state.
-- Risk: If cleanup logic breaks, temp files accumulate or partially-written files remain.
-- Priority: **Medium** — manual test or use process spawning in test harness to send signals.
+**修復方式：** 
+將 `checkWriteAccess()` 改為檢查父目錄的寫入權限，而不是目標檔案本身。或者，在 `writeJsonSafe()` 中移除 `checkWriteAccess()` 的前置檢查，改為在寫入失敗時捕捉異常並轉換為 `SyncError`。
 
 ---
 
-*Concerns audit: 2026-04-07*
+### 互動確認的 TTY 檢測缺失
+
+**問題：** `askConfirm()` 在 `sync.js` 第 1717-1725 行會使用 `readline.createInterface()` 建立互動提示，但不檢查 `process.stdin.isTTY` 或 `process.stdout.isTTY`。
+
+**檔案：** `sync.js` 行 1717-1725
+
+**影響：** 
+- 在非互動環境（如 CI pipeline、後台執行、管道重導向）中，`readline.question()` 會無限等待或行為異常
+- `to-local` 指令會在 CI 環境中掛起
+
+**修復方式：** 
+在 `askConfirm()` 開頭檢查 `!process.stdin.isTTY`，若為非互動環境應拋出 `SyncError` 或提前回傳 `false`，並提示使用者使用 `--dry-run` 預覽。
+
+---
+
+### 暫存檔清理的競態條件
+
+**問題：** `registerTempFile()` 與 `cleanupTempFiles()` 的實作中，若多個並發操作（虛擬）或信號處理時，可能導致重複清理或清理已刪除檔案。
+
+**檔案：** `sync.js` 行 218-241
+
+**影響：** 
+- 低風險，因為此工具單執行緒執行
+- 但若未來改為異步操作，此邏輯會有問題
+
+**修復方式：** 
+暫存檔路徑中已含 `process.pid`，理論上不會衝突。對於 `fs.unlinkSync()` 的錯誤，現有程式碼已用 `try-catch` 忽略，這是可接受的防禦性設計。無需改變。
+
+---
+
+### LCS Diff 引擎的記憶體臨界值硬編碼
+
+**問題：** `LCS_MAX_LINES = 2000`（`sync.js` 第 42 行）是硬編碼的臨界值。超過此值會切換到簡易逐行比對，但簡易比對的結果品質較差（會忽略行的位置資訊）。
+
+**檔案：** `sync.js` 行 42, 635-637, 675-694
+
+**影響：** 
+- 2000 行閾值對於 Node.js 18+ 較為保守（現代機器通常有充足記憶體）
+- 超大檔案（如 agents 套件）的 diff 結果可能不精確
+
+**修復方式：** 
+考慮提升臨界值到 5000-10000 行，或使用環境變數 `SYNC_AI_LCS_MAX_LINES` 讓使用者調整。
+
+---
+
+## 已知 Bug
+
+### 暫無已知 Bug
+
+最近幾個迭代（iter4/iter5）已修復以下問題：
+- `applySyncItems` 不再強制覆寫（commit 7eaed4d）
+- settings.json 序列化對稱性確保（commit b5bf284）
+- `to-repo` 完成後正確顯示 git diff（commit b5bf284）
+
+---
+
+## 安全考量
+
+### 環境變數與敏感路徑洩漏
+
+**風險：** 雖然程式碼已在 `toRelativePath()` 中處理使用者主目錄遮罩，但以下場景仍可能洩漏敏感資訊：
+
+**檔案：** `sync.js` 行 197-209
+
+**目前保護：**
+- diff header 輸出使用相對路徑（行 710-711）
+- 錯誤訊息中的路徑使用 `toRelativePath()` 遮罩（行 181）
+
+**潛在缺口：**
+- `.sync-history.log` 已寫入的日誌可能包含絕對路徑（但被列入 `.gitignore`）
+- verbose 模式下的路徑顯示已正確使用相對路徑（行 1189-1190）
+
+**建議：** 
+定期審查 `.sync-history.log` 內容不上傳，`.gitignore` 應維持現狀。
+
+---
+
+### 檔案權限與跨平台問題
+
+**風險：** `checkWriteAccess()` 在 Windows 與 POSIX 系統上的行為差異。
+
+**檔案：** `sync.js` 行 318-325
+
+**受影響的系統：**
+- Windows：某些情況下 `fs.accessSync()` 無法準確偵測實際可寫性
+- macOS/Linux：行為一致
+
+**建議：** 
+考慮改用 `fs.statSync()` + 位元檢查，但這會增加複雜度。目前的作法（嘗試寫入後捕捉異常）更可靠。
+
+---
+
+## 測試覆蓋缺口
+
+### 缺乏 I/O 相關的集成測試
+
+**涉及範圍：**
+- `copyFile()` / `mirrorDir()` 的實際檔案操作
+- `mergeSettingsJson()` 的 `to-repo` 與 `to-local` 路徑
+- `runToLocal()` 的互動確認流程
+
+**檔案：** `test/sync.test.js` 只包含純函式單元測試
+
+**目前依賴：** 人工 smoke test（在文件中提及）
+
+**改進方式：** 
+由於零外部相依的限制，無法使用 Jest/Vitest 的 mock。可以：
+1. 新增 `test/integration.test.js` 使用 Node.js 內建 `node:test` 搭配臨時目錄進行 I/O 測試
+2. 或維持現狀，依賴人工驗證（目前可接受）
+
+---
+
+### JSON 解析錯誤的邊界測試不足
+
+**問題：** `readJson()` 只有單元測試但無集成測試。
+
+**檔案：** `sync.js` 行 333-355
+
+**缺口：**
+- 損壞 JSON 檔案的處理（目前只有錯誤訊息）
+- BOM 或非 UTF-8 編碼的檔案
+
+**建議：** 
+若 settings.json 損壞，使用者應手動修復。目前錯誤訊息明確，可接受。
+
+---
+
+## 可靠性問題
+
+### 無提交鎖定機制
+
+**問題：** `to-repo` 完成後會顯示 `git add -A && git commit` 建議，但不自動執行，依賴使用者手動執行。
+
+**檔案：** `sync.js` 行 1138-1173
+
+**風險：**
+- 使用者忘記 push，多裝置同步失敗
+- 另一台裝置同步時覆寫未 push 的變更
+
+**緩解方式：** 
+文件中已明確說明 skills 不自動同步，使用者應理解工具只到 git add 為止。
+
+**改進方式：** 
+可新增 `--auto-commit` 旗標或 hook 支援，但會增加複雜度，不符合當前「輕量級」設計。
+
+---
+
+### 目錄鏡像的刪除邏輯
+
+**問題：** `mirrorDir()` 會刪除目的目錄中 src 沒有的檔案（行 499-507）。
+
+**檔案：** `sync.js` 行 470-510
+
+**風險：**
+- `to-local` 時，若 repo 中刪除了某檔案，本機對應檔案會被刪除（符合預期）
+- `to-repo` 時，本機刪除的檔案會從 repo 移除（符合預期，已實現完整鏡像）
+
+**現況：** 行為正確且已審核（CLAUDE.md 無留言），無需改變。
+
+---
+
+## 擴展性限制
+
+### 單檔設計導致函式增長
+
+**問題：** 所有邏輯集中在 `sync.js`（~1800 行），雖然遵守「≤60 行函式」原則，但檔案本身難以維護。
+
+**檔案：** `sync.js` 全部
+
+**目前組織：** section banner 分段（18+ 個 section）
+
+**限制：**
+- IDE 導航困難
+- 無法按功能模塊化載入
+- 測試時必須 `require()` 整個檔案
+
+**取捨：** 零外部相依的約束下，這是合理的設計。若要改進，需評估引入模塊系統的收益。
+
+---
+
+### 沒有配置檔支援
+
+**問題：** 所有設定（排除模式、臨界值、設備欄位）都硬編碼在程式碼中。
+
+**檔案：** `sync.js` 行 32-46
+
+**影響：**
+- 若要調整 `DEVICE_FIELDS`，需修改源碼 + 單元測試
+- 無法自訂 `LCS_MAX_LINES` 或排除模式
+
+**建議：** 
+如果將來需要更靈活的配置，可考慮讀取 `.sync-ai.json` 或環境變數，但目前功能足夠，無需改變。
+
+---
+
+## 性能考量
+
+### diff 外部指令依賴
+
+**問題：** `printFileDiff()` 優先使用外部 `diff` 指令，如不可用才用純 JS fallback。
+
+**檔案：** `sync.js` 行 703-735
+
+**現狀：**
+- `isDiffAvailable()` 快取結果（行 282-288）
+- Windows 環境下 `diff` 通常不可用，會用 JS fallback
+- 純 JS 實作使用 LCS，性能可接受
+
+**改進方向：** 
+考慮預載所有大檔案的 diff 結果並快取，但成本不值。
+
+---
+
+### 遞迴目錄掃描的效率
+
+**問題：** `getFiles()` 遞迴掃描目錄（行 429-447），在深層目錄結構上可能較慢。
+
+**檔案：** `sync.js` 行 429-447
+
+**現狀：**
+- agents / commands 目錄通常不會很深或很大
+- 每次 diff / apply 都會重新掃描
+
+**影響：** 低。若有大量檔案（>1000），可考慮快取，但目前不必要。
+
+---
+
+## 技術負債總結
+
+| 項目 | 優先級 | 複雜度 | 建議 |
+|------|--------|--------|------|
+| `writeJsonSafe` checkWriteAccess 時序 | 中 | 低 | 下個迭代修復 |
+| `askConfirm` TTY 檢測 | 高 | 低 | 優先修復（CI 環境可用性） |
+| LCS 記憶體臨界值 | 低 | 低 | 可選改進 |
+| 單檔設計可維護性 | 低 | 高 | 暫不改變 |
+| 配置檔支援 | 低 | 中 | 需求驅動 |
+
+---
+
+*技術債審計：2026-04-09*

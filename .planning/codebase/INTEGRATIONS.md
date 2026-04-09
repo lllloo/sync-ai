@@ -1,165 +1,146 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-04-09
 
 ## APIs & External Services
 
 **Git Repository:**
-- Git (local repository management)
-  - Used for: Version control of Claude Code settings across devices
-  - Execution method: `child_process.spawnSync` to run git commands
-  - Operations: clone, pull, push, diff, status
-  - Location in code: `sync.js` git command handlers
+- Git CLI - Version control for configuration sync
+  - Tool: `git` command via `child_process.spawnSync`
+  - Operations: `status`, `diff`, `diff --stat`, `rev-parse --is-inside-work-tree`, `--version`
+  - Config: `.git/` directory (standard Git repo)
+  - Authentication: SSH keys or system Git credentials
+  - Purpose: Stores and manages cross-device Claude Code configuration
 
-**GitHub (Marketplace & Skills):**
-- Source for Claude Code agents/skills
-- Integration method: Defined in `settings.json` marketplace configuration
-- Marketplaces configured:
-  - `wshobson/agents` (claude-code-workflows)
-  - `affaan-m/everything-claude-code` (everything-claude-code)
-  - `kepano/obsidian-skills` (obsidian-skills)
+**Skills Management (Claude Code Skills):**
+- NPM Skills Registry (via `npx skills`)
+  - Tool: `npx skills` command line tool
+  - Source: https://skills.sh/ or GitHub package sources
+  - Installation: `npx skills add <source> -g -y --skill <name>`
+  - Removal: `npx skills remove <name> -g -y`
+  - Config file: `skills-lock.json` (cross-device manifest)
+  - Purpose: Track installed skills across multiple devices
+
+## Skills Sources
+
+**Tracked in `skills-lock.json`:**
+
+| Skill Name | GitHub Source | Type |
+|------------|---------------|------|
+| vue-best-practices | vuejs-ai/skills | github |
+| frontend-design | anthropics/skills | github |
+| skill-creator | anthropics/skills | github |
+| gan-style-harness | affaan-m/everything-claude-code | github |
+| playwright-cli | microsoft/playwright-cli | github |
+| defuddle | kepano/obsidian-skills | github |
+| json-canvas | kepano/obsidian-skills | github |
+| obsidian-bases | kepano/obsidian-skills | github |
+| obsidian-cli | kepano/obsidian-skills | github |
+| obsidian-markdown | kepano/obsidian-skills | github |
 
 ## Data Storage
 
-**Databases:**
-- Not applicable - Zero database dependencies
-
-**File Storage:**
-- Local filesystem only
-- Storage locations:
-  - `~/.claude/` - Claude Code global configuration directory
-  - `~/.claude/CLAUDE.md` - Global instructions and conventions
-  - `~/.claude/settings.json` - Claude Code settings (device-specific fields: `model`, `effortLevel`)
-  - `~/.claude/statusline.sh` - Status line display script
-  - `~/.claude/agents/` - Claude Code agents organized by package subdirectories
-  - `~/.claude/commands/` - Claude Code custom commands
-  - `~/.agents/` - Installed skills (actual implementation files, git-ignored)
-
-**Sync Repository Storage:**
-- Private Git repository contains:
-  - `claude/CLAUDE.md` - Master copy of global instructions
-  - `claude/settings.json` - Master settings (device fields stripped during sync)
-  - `claude/statusline.sh` - Master status display script
-  - `claude/agents/` - Agent definitions organized by package
+**Git Repository:**
+- Location: Private Git repository (as configured by user)
+- Contents:
+  - `claude/CLAUDE.md` - Global Claude Code project instructions
+  - `claude/settings.json` - Shared Claude Code settings (stripped of device-specific fields)
+  - `claude/statusline.sh` - Terminal status line utility
+  - `claude/agents/` - Agent scripts organized by package source
   - `claude/commands/` - Command definitions
-  - `skills-lock.json` - Skills manifest (reference, not auto-synced)
+  - `skills-lock.json` - Skills manifest
 
-**Configuration Caching:**
-- `.sync-history.log` - Audit trail of synchronization operations (git-ignored)
+**Local User Configuration:**
+- Base: `~/.claude/` directory
+- Mirror of repo structure for active settings
+- Devices synchronize bidirectionally: `~/.claude/` ↔ `./claude/`
 
-**Caching:**
-- None configured
+**Local Skills Lock:**
+- Location: `~/.agents/.skill-lock.json`
+- Purpose: Track locally installed skills (device-specific)
+- Format: JSON with `version` and `skills` object
+- Updated by: `npx skills install` / `npx skills add` / `npx skills remove`
+
+**Logs:**
+- Location: `.sync-history.log` (git-ignored, local only)
+- Purpose: Record all to-repo and to-local operations with timestamps
+- Format: Plain text log
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- GitHub (via SSH or HTTPS)
-  - Implementation: Git authentication for private repository access
-  - No explicit OAuth or token configuration in settings
-  - Uses system git configuration for authentication
+- None built-in - Uses system Git credentials
+- SSH Keys: Located in `~/.ssh/` (system default)
+- Credential Storage: Git credential helper or SSH agent
 
-**Claude Code Settings:**
-- User identity maintained in `settings.json`
-- `language`: Set to Traditional Chinese (繁體中文)
-- Device-specific models and effort levels excluded from sync
+## File Synchronization Exclusions
+
+**Always Excluded:**
+- `.DS_Store` - macOS system files
+- `.agents/` directory - Skill implementation files (git-ignored)
+- `.sync-history.log` - Operation history (git-ignored)
+- Device-specific fields in `settings.json`: `model`, `effortLevel`
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None - Local error handling only
+- None - Errors handled via console output with ANSI color codes
 
 **Logs:**
-- `.sync-history.log` - Custom audit log
-  - Records: Timestamp, operation type, device name, modified files with status
-  - Format: Human-readable text with status indicators
-  - Example: `[2026-04-07T03:53:38.022Z] to-repo @ DESKTOP-PRK0EVL`
-  - Persistence: File-based, git-ignored (not committed)
-
-**Status Display:**
-- `claude/statusline.sh` - Displays in Claude Code UI
-  - Shows: Current model, folder, git branch, context usage percentage
-  - Shows: Rate limits (5-hour and 7-day windows) with reset countdowns
-  - Zero subprocess usage (pure bash regex and parameter expansion)
+- `.sync-history.log` - Local operation log (not synced)
+- Console output with structured error messages via `SyncError` class
+- Error codes: `FILE_NOT_FOUND`, `JSON_PARSE`, `GIT_ERROR`, `PERMISSION`, `INVALID_ARGS`, `IO_ERROR`
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- No server-side hosting
-- Decentralized: Runs on user's local machines
-
-**Deployment Model:**
-- Self-hosted Git repository
-- Clone and run locally: `git clone <repo> && cd sync-ai && npm run to-local`
+- User-provided private Git repository
 
 **CI Pipeline:**
-- Exit code semantics enable CI integration:
-  - `0` (success/no changes) - Can be used to determine sync state
-  - `1` (differences detected) - Can trigger actions
-  - `2` (error) - Can fail CI build
+- Not built-in - User responsibility for setup
+- Exit codes available for CI integration:
+  - `0` (EXIT_OK) - Success or no differences
+  - `1` (EXIT_DIFF) - Differences detected (useful for CI gates)
+  - `2` (EXIT_ERROR) - Error occurred
+
+**Deployment Model:**
+- Manual sync: User runs `npm run to-repo` / `npm run to-local`
+- Expected workflow: Clone repo → `npm run to-local` → daily `npm run to-repo` / `npm run status`
 
 ## Environment Configuration
 
-**Required Environment Variables:**
-- None explicitly required - Uses system paths via `os.homedir()`
+**Required env vars:**
+- None explicitly required
+- Implicit: `HOME` (or uses `os.homedir()` on Windows)
 
-**Settings Configuration:**
-- Global Claude Code settings via `settings.json`
-- Environment variables can be set in `settings.json.env` object:
-  - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"1"`
-
-**Secrets Location:**
-- Settings file path: `~/.claude/settings.json`
-- No embedded API keys or secrets in codebase
-- Git credentials: Uses system git configuration (SSH keys or credential helper)
-- Sensitive path information: Obfuscated in output via `toRelativePath()` function
+**Secrets location:**
+- Git credentials: `~/.ssh/` or Git credential helper
+- `.env` files: Not used - configuration is JSON-based and version-controlled
+- No API keys stored in codebase
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None configured
+- None - Tool is command-driven
 
 **Outgoing:**
-- None - No outbound notifications or callbacks
+- None - Tool does not send HTTP requests or webhooks
+- External process spawning only (Git, diff, npx)
 
-## Skills & Plugins Integration
+## Tool Dependencies (Spawned Processes)
 
-**Installed Skills (Non-Auto-Synced):**
-- `vue-best-practices` (vuejs-ai/skills)
-- `frontend-design` (anthropics/skills)
-- `skill-creator` (anthropics/skills)
-- `gan-style-harness` (affaan-m/everything-claude-code)
+**Mandatory (Must be in system PATH):**
+- `git` - Version control
+- `node` - JavaScript runtime
 
-**Plugin Configuration:**
-- `obsidian@obsidian-skills` - Obsidian integration enabled in `settings.json`
+**Conditional (Used if available):**
+- `diff` - File comparison (fallback for large file diffs)
+- `npx` - npm package executor (for skills management, not executed by tool)
 
-**Skills Management:**
-- Tracked in `skills-lock.json` as source of truth (reference only)
-- Not auto-synced via `to-repo`/`to-local`
-- Manual installation/removal via `npm run skills:diff` and `npx skills` commands
-- Location in code: `sync.js` handles `skills:diff` and `skills:add` commands
-
-## Permission Model
-
-**Claude Code Permissions (settings.json):**
-
-Allowed operations:
-- Bash: `cat`, `cd`, `cp`, `date`, `du`, `echo`, `find`, `grep`, `head`, `ls`, `mkdir`, `sort`, `tail`, `tr`, `wc`, `git`, `gh api`, `gh repo`, node scripts, npm, npx skills, python3, docker-compose, code, obsidian, WebFetch, WebSearch, Pencil MCP
-
-Denied operations:
-- `Bash(git push:*)` - Intentional deny to prevent accidental force pushes
-
-## Cross-Device Sync Model
-
-**Sync Strategy:**
-- Single-directional upstream (local → repo): `to-repo` command
-- Single-directional downstream (repo → local): `to-local` command with preview
-- Dry-run mode: `--dry-run` flag for preview without applying changes
-- Atomic operations: All changes applied together (all or nothing)
-
-**Device Identity:**
-- Device name logged in `.sync-history.log` (e.g., `DESKTOP-PRK0EVL`)
-- Settings `model` and `effortLevel` maintained locally, not synced
+**System Paths:**
+- All external tools resolved via `child_process.spawnSync` without explicit PATH manipulation
+- Relies on user's system PATH configuration
 
 ---
 
-*Integration audit: 2026-04-07*
+*Integration audit: 2026-04-09*

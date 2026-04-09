@@ -1,201 +1,203 @@
-# Codebase Structure
+# 程式碼庫結構
 
-**Analysis Date:** 2026-04-07
+**分析日期：** 2026-04-09
 
-## Directory Layout
+## 目錄佈局
 
 ```
 sync-ai/
-├── sync.js                  # Main CLI script (~1700 lines, zero dependencies)
-├── package.json            # npm scripts and metadata
-├── README.md               # User documentation and usage guide
-├── CLAUDE.md               # Project-specific Claude Code guidelines
-├── skills-lock.json        # Global skills manifest (device reference, not auto-synced)
-├── .gitignore              # Git ignore rules
-├── .sync-history.log       # Operation audit log (auto-generated, in .gitignore)
-├── test/
-│   └── sync.test.js        # Pure function unit tests (node:test, zero dependencies)
-├── claude/                 # Repo-side sync targets (mirrors ~/.claude/)
-│   ├── CLAUDE.md           # Global Claude Code instructions
-│   ├── settings.json       # Shared Claude Code settings (device fields stripped)
-│   ├── statusline.sh       # Bash statusline script
-│   ├── agents/             # Global agents (organized by package)
-│   │   └── awesome-claude-code-subagents/
-│   └── commands/           # Global commands directory mirror
-├── .agents/                # Local installed skill instances (in .gitignore)
-│   └── skills/
-├── .claude/                # Local project Claude Code config
-│   ├── settings.json       # Local settings (overrides)
-│   └── ...
-├── .planning/
-│   └── codebase/           # GSD codebase analysis documents
-│       ├── ARCHITECTURE.md
-│       └── STRUCTURE.md
-└── .git/                   # Git repository
+├── sync.js                 # 主應用邏輯（~1800 行，零外部相依）
+├── package.json            # NPM 指令與元數據
+├── README.md               # 使用文件
+├── CLAUDE.md               # 專案修改守則
+├── skills-lock.json        # 全域 skills 清單（source of truth）
+├── .sync-history.log       # 同步操作日誌（.gitignore）
+├── .gitignore              # Git 忽略清單
+│
+├── test/                   # 測試套件
+│   ├── sync.test.js        # 純函式單元測試（node:test）
+│   └── settings.test.js    # settings 相關測試
+│
+├── claude/                 # 同步内容根目錄（映射到 ~/.claude/）
+│   ├── CLAUDE.md           # 全域 Claude 指示（同 ~/.claude/CLAUDE.md）
+│   ├── settings.json       # Claude Code 設定（去除 model/effortLevel）
+│   ├── statusline.sh       # 狀態列腳本
+│   │
+│   ├── agents/             # agents 儲存區
+│   │   ├── everything-claude-code/    # 來源：affaan-m/everything-claude-code
+│   │   │   ├── architect.md
+│   │   │   ├── build-error-resolver.md
+│   │   │   └── ... (20+ agents)
+│   │   │
+│   │   └── awesome-claude-code-subagents/  # 來源：VoltAgent/awesome-claude-code-subagents
+│   │       ├── backend-developer.md
+│   │       ├── frontend-developer.md
+│   │       └── ... (8+ agents)
+│   │
+│   └── commands/           # 命令儲存區（鏡射 ~/.claude/commands/）
+│       └── gsd/            # GSD 命令集群
+│           └── ... (若干 .md 文件)
+│
+├── .agents/                # 本機安裝 skills 實體（.gitignore，不進 repo）
+├── .planning/              # 規劃文件（含此結構分析）
+│   └── codebase/
+│       └── ARCHITECTURE.md / STRUCTURE.md
+│
+└── .git/                   # Git 版本控制
 ```
 
-## Directory Purposes
+## 目錄用途
 
-**Project Root:**
-- Purpose: CLI tool entry point and configuration
-- Contains: Main script, tests, documentation, repo-side sync targets
-- Key files: `sync.js` (executable), `package.json` (npm scripts)
+**sync.js：**
+- 目的：所有應用邏輯
+- 包含：CLI 解析、命令派發、同步核心、FS utilities、settings 處理、display 層
+- 關鍵特徵：
+  - section banner 分段組織（Constants / Errors / FS Utilities / Commands 等）
+  - 所有函式 ≤ 60 行（強制）
+  - 無外部相依，只用 Node.js 內建模組
 
-**`test/`:**
-- Purpose: Unit test suite for pure functions
-- Contains: `sync.test.js` with node:test specs
-- Key files: `sync.test.js` — tests `computeLineDiff`, `matchExclude`, `statusToStatsKey`, `parseSkillSource`, `parseArgs`, `toRelativePath`, `COMMANDS` completeness
-- No dependencies: Uses only Node.js `node:test` and `node:assert/strict`
+**test/：**
+- 目的：單元與集成測試
+- 包含：
+  - `sync.test.js`：純函式單元測試（computeLineDiff / matchExclude / parseArgs 等）
+  - `settings.test.js`：settings 序列化與去除欄位測試
+- 框架：Node.js 內建 `node:test`（零相依）
+- 執行：`npm test` 或 `node --test test/*.js`
 
-**`claude/`:**
-- Purpose: Source of truth for settings synced across devices
-- Contains: Global CLAUDE.md, shared settings.json, statusline.sh, agents, commands
-- Key files:
-  - `claude/CLAUDE.md` — mirrored from `~/.claude/CLAUDE.md`
-  - `claude/settings.json` — shared Claude Code config (device-specific fields stripped during sync)
-  - `claude/agents/` — organized by package subdirectories (e.g., `awesome-claude-code-subagents/`)
-  - `claude/commands/` — directory mirror of `~/.claude/commands/`
-- Sync strategy: Compared against `~/.claude/` in both directions
+**claude/：**
+- 目的：同步内容（映射到 `~/.claude/`）
+- 結構：與 `~/.claude/` 鏡像
+- 何時更新：`npm run to-repo`
+- 何時修改本機：`npm run to-local`
 
-**`.agents/`:**
-- Purpose: Local installed skill instances
-- Contains: Downloaded skill implementations
-- In .gitignore: Not version controlled (reference only in `skills-lock.json`)
-- Not auto-synced: Skills managed via `npm run skills:*` commands
+**claude/agents/：**
+- 目的：agent 定義檔（.md）
+- 組織：
+  - `everything-claude-code/`：主要套件來源（affaan-m）
+  - `awesome-claude-code-subagents/`：補充來源（VoltAgent），按分類子目錄存放
+- 部署：`~/.claude/agents/` 中對應的子目錄
+- 注意：實體檔案 (`.agents/`) 不進 repo（.gitignore）
 
-**`.claude/`:**
-- Purpose: Local Claude Code project configuration
-- Contains: Project-specific settings.json, hooks, GSD config
-- In .gitignore: Device-specific, never synced
-- Note: Contains hooks like `gsd-check-update.js`, `gsd-read-guard.js` (GSD integration)
+**claude/commands/：**
+- 目的：自訂命令定義
+- 組織：以功能分組（如 `gsd/` 用於 GSD 命令）
+- 部署：`~/.claude/commands/` 鏡像
 
-**`.planning/codebase/`:**
-- Purpose: GSD codebase analysis output
-- Contains: ARCHITECTURE.md, STRUCTURE.md, CONVENTIONS.md, TESTING.md, CONCERNS.md (as generated)
-- Not synced: Project-local documentation only
+**skills-lock.json：**
+- 目的：全域 skills manifest（跨裝置 source of truth）
+- 結構：`{ version: 1, skills: { <name>: { source, sourceType } } }`
+- 何時修改：`npm run skills:add`
+- 作用：記錄已安裝 skills，供 `npm run skills:diff` 比對
 
-## Key File Locations
+**.sync-history.log：**
+- 目的：同步操作日誌
+- 內容：每次 to-repo / to-local 的 timestamp / hostname / 變更清單
+- 保留：.gitignore（本機檔案，不進 repo）
 
-**Entry Points:**
-- `sync.js` (line 1730): Main CLI entry point, calls `main()` and exits
-- `test/sync.test.js` (line 1): Test suite entry, imports pure functions
+## 關鍵檔案位置
 
-**Configuration:**
-- `package.json`: npm scripts (`diff`, `to-repo`, `to-local`, `skills:diff`, `skills:add`, `test`)
-- `sync.js` (lines 15-81): Constants (paths, exit codes, device fields, status icons, command registry)
-- `CLAUDE.md`: Project guidelines and modification rules (sync items, architecture constraints)
+**進入點：**
+- `sync.js:1788-1795`：主應用進入點（if require.main === module）
+- `sync.js:1736-1767`：`main()` 命令派發
+- `package.json` 的 scripts：npm 指令定義
 
-**Core Logic:**
-- `sync.js` (lines 920-1074): Sync core (`buildSyncItems`, `diffSyncItems`, `applySyncItems`)
-- `sync.js` (lines 1157-1610): Command handlers (`runDiff`, `runToRepo`, `runToLocal`, `runSkillsDiff`, `runSkillsAdd`)
-- `sync.js` (lines 570-800): Diff engine (`diffFile`, `diffDir`, `computeLineDiff`, `matchExclude`)
-- `sync.js` (lines 289-528): FS utilities (`readJson`, `writeJsonSafe`, `copyFile`, `mirrorDir`, `ensureDir`)
+**配置：**
+- `sync.js:20-81`：全域常數（REPO_ROOT / CLAUDE_HOME / DEVICE_FIELDS / COMMANDS 等）
+- `sync.js:112-120`：ANSI 色碼工具（col 物件）
+- `package.json`：版本號與 npm 腳本
 
-**Testing:**
-- `test/sync.test.js` (lines 28-150+): Pure function test cases
-- Covers: `computeLineDiff`, `matchExclude`, `statusToStatsKey`, `parseSkillSource`, `parseArgs`, `toRelativePath`
+**核心邏輯：**
+- `sync.js:291-530`：FS utilities（readJson / writeJsonSafe / copyFile / mirrorDir）
+- `sync.js:948-1002`：`buildSyncItems()` 同步項目構建
+- `sync.js:1055-1092`：`diffSyncItems()` 差異計算
+- `sync.js:1101-1132`：`applySyncItems()` 變更套用
+- `sync.js:831-910`：Settings 處理（serializeSettings / mergeSettingsJson）
 
-**Utilities:**
-- `sync.js` (lines 106-119): ANSI color output (`col.red`, `col.green`, etc.)
-- `sync.js` (lines 121-209): Error handling (`SyncError`, `formatError`, `toRelativePath`)
-- `sync.js` (lines 212-267): Temp file management and signal handlers
-- `sync.js` (lines 1547-1595): Output formatting (`printStatusLine`, `printFileDiff`, `runHelp`)
+**指令實現：**
+- `sync.js:1274-1311`：`runDiff()` 比對指令
+- `sync.js:1329-1365`：`runToRepo()` 上傳指令
+- `sync.js:1372-1396`：`runToLocal()` 下載指令（含互動確認）
+- `sync.js:1467-1531`：`runSkillsDiff()` / `runSkillsAdd()` skills 管理
 
-## Naming Conventions
+**測試：**
+- `test/sync.test.js:1-30`：測試框架與匯入
+- `test/sync.test.js:28-80`：computeLineDiff 測試
+- `test/sync.test.js:56-71`：matchExclude 測試
 
-**Files:**
+## 命名規範
 
-- **Main script**: `sync.js` (executable, ~1700 lines, camelCase for internal consistency)
-- **Test files**: `sync.test.js` (follows `.test.js` naming, not `.spec.js`)
-- **Config**: `settings.json` (JSON config file)
-- **Manifest**: `skills-lock.json`, `.sync-history.log`
-- **Documentation**: `README.md`, `CLAUDE.md` (uppercase markdown)
-- **Git ignore**: `.gitignore`
+**檔案：**
+- 主腳本：`sync.js`（單數，非 syncs.js）
+- 測試：`<module>.test.js`（e.g. `sync.test.js`）
+- 配置：`package.json` / `.gitignore` / `skills-lock.json`
+- Markdown：`README.md` / `CLAUDE.md` / 文件名首字大寫
 
-**Directories:**
+**目錄：**
+- 同步目錄：小寫 + 複數（`agents/` / `commands/`）
+- 包來源：kebab-case + 複數（`everything-claude-code/` / `awesome-claude-code-subagents/`）
+- 測試目錄：`test/`（常規名稱）
 
-- **Sync targets**: `claude/`, `.agents/`, `.claude/` (mirrors of CLI home directories)
-- **Test**: `test/` (contains test files)
-- **Planning**: `.planning/codebase/` (GSD codebase docs)
-- **Tool dirs**: `.git/` (version control)
+**函式：**
+- 指令 handler：`run<Command>()` 或 `run<Command><Subcommand>()`
+  - e.g. `runDiff()` / `runToRepo()` / `runSkillsDiff()`
+- 工具函數：camelCase，動詞優先
+  - e.g. `readJson()` / `copyFile()` / `mirrorDir()` / `checkReadAccess()`
+- 純函式（單元測試）：camelCase
+  - e.g. `computeLineDiff()` / `matchExclude()` / `parseArgs()`
+- 顯示函數：`print<What>()` 或 `log<What>()`
+  - e.g. `printStatusLine()` / `printFileDiff()` / `logVerbosePaths()`
 
-**Functions:**
+**變數：**
+- 常數：SCREAMING_SNAKE_CASE
+  - e.g. `REPO_ROOT`, `CLAUDE_HOME`, `DEVICE_FIELDS`, `LCS_MAX_LINES`
+- 物件 / 陣列：camelCase
+  - e.g. `syncItems`, `diffItems`, `tempFiles`
+- 旗標：camelCase
+  - e.g. `dryRun`, `verbose`, `isWriting`
 
-- **Commands**: camelCase with command name prefix (e.g., `runDiff`, `runToRepo`, `runSkillsDiff`)
-- **Utilities**: camelCase verbs (e.g., `copyFile`, `mirrorDir`, `ensureDir`, `diffFile`, `readJson`, `writeJsonSafe`)
-- **Checks**: `is*` or `check*` (e.g., `isDiffAvailable`, `isGitAvailable`, `isInsideGitRepo`, `checkReadAccess`, `checkWriteAccess`)
-- **Parsers**: `parse*` (e.g., `parseArgs`, `parseSkillSource`)
-- **Formatters**: `*ToString` or `format*` or `print*` (e.g., `toRelativePath`, `formatError`, `printStatusLine`, `printFileDiff`)
-- **Pure diff**: `compute*` (e.g., `computeLineDiff`, `computeSimpleLineDiff`)
+## 新增程式碼的位置
 
-**Variables:**
+**新功能（指令）：**
+- 指令定義：更新 `COMMANDS` 物件（`sync.js:63-71`）
+- 指令別名：自動從 `COMMANDS.alias` 產生（sync.js:74-78）
+- Handler 實現：在「Commands」section 新增函數（sync.js:1175-1600）
+- 注入：在 `attachCommandHandlers()` 中加入（sync.js:1774-1782）
+- 測試：`test/sync.test.js` 新增測試
+- 文件：更新 `README.md`
 
-- **Private/internal**: Prefix with `_` (e.g., `_diffAvailable`)
-- **Constants**: UPPER_SNAKE_CASE (e.g., `REPO_ROOT`, `CLAUDE_HOME`, `DEVICE_FIELDS`, `LCS_MAX_LINES`, `EXIT_OK`, `ERR`)
-- **Objects**: camelCase (e.g., `col`, `STATUS_ICONS`, `COMMANDS`, `COMMAND_ALIASES`)
+**新同步項目（如 agents / commands）：**
+- 新增：在 `buildSyncItems()` 的 `SyncItem[]` 陣列中加入
+  - `sync.js:949-1001`，在相應 direction 區塊加入項目
+- 測試：單元測試 buildSyncItems 產出
+- 文件：更新 CLAUDE.md 的「同步項目與對應」表
 
-**Types (JSDoc):**
+**utilities（工具函數）：**
+- FS 相關：加入「FS Utilities」section（sync.js:291-530）
+- Display 相關：加入「Display Utilities」section（sync.js:793-828）
+- 通用：加入對應 section（Constants / Settings / etc.）
+- 匯出：若需測試，加入 module.exports（sync.js:1797-1819）
 
-- **Class names**: PascalCase (e.g., `SyncError`)
-- **Typedef names**: PascalCase (e.g., `SyncItem`, `ParsedArgs`)
-- **Enum-like constants**: PascalCase (e.g., `ERR`, `STATUS_ICONS`)
+**測試：**
+- 位置：
+  - 純函式測試：`test/sync.test.js`
+  - settings 相關：`test/settings.test.js`
+- 框架：Node.js 內建 `node:test` + `assert/strict`
+- 模式：`test('<描述>', () => { assert.equal(...) })`
 
-## Where to Add New Code
+## 特殊目錄
 
-**New Command:**
-- Add entry to `COMMANDS` object (`sync.js` lines 63-70)
-- Implement `runNewCommand(opts)` handler in Commands section (`sync.js` lines 1157+)
-- Inject handler in `attachCommandHandlers()` (`sync.js` lines 1717-1724)
-- Add corresponding npm script in `package.json`
-- Update `README.md` with usage and examples
-- If command is pure function, add tests to `test/sync.test.js`
+**.agents/（本機 skill 安裝實體）：**
+- 目的：存放 `npx skills install` 下載的實體檔案
+- 生成：自動（由 skills CLI）
+- 提交：.gitignore（不進 repo）
+- 作用：本機 skill 執行環境
 
-**New Sync Item:**
-- Add to `buildSyncItems()` array (`sync.js` lines 939-983)
-- Specify `label` (display name), `src`, `dest`, `type` ('file'|'settings'|'dir')
-- Update `CLAUDE.md` documentation with new sync item
-- Update `README.md` with new sync target
-- Test via `npm run diff` to verify inclusion
-
-**New Utility Function:**
-- Add to appropriate section in `sync.js` (e.g., FS Utilities, Diff Engine, Output Formatting)
-- Keep function ≤60 lines (split if necessary)
-- Use JSDoc `@param`, `@returns`, `@throws` annotations
-- If pure function, add unit test to `test/sync.test.js`
-- Export from `module.exports` if testable (line 1739+)
-
-**New Error Type:**
-- Add code constant to `ERR` object (`sync.js` lines 145-152)
-- Add hint message to `hints` object in `formatError()` (`sync.js` lines 165-172)
-- Throw via `new SyncError(msg, ERR.NEW_CODE, {context})`
-
-**New Test:**
-- Add to `test/sync.test.js` following existing patterns
-- Use `test('description', () => {...})` from `node:test`
-- Test only pure functions (no I/O)
-- Use `assert.equal()`, `assert.deepEqual()`, `assert.throws()` from `node:assert/strict`
-
-## Special Directories
-
-**`.gitignore` targets:**
-- Purpose: Track files intentionally excluded from version control
-- Committed: Yes (the `.gitignore` file itself is in repo)
-- Generated: No
-- Contents: `.agents/` (installed skills), `.sync-history.log` (operation audit), `.DS_Store` (macOS)
-
-**`.claude/` (project-local):**
-- Purpose: Project-specific Claude Code configuration
-- Committed: No (in .gitignore, device-specific)
-- Generated: Auto-created by Claude Code when needed
-- Contents: GSD hooks, project settings overrides
-- Not synced: This directory is always local-only
-
-**`.planning/codebase/`:**
-- Purpose: GSD codebase analysis output
-- Committed: Yes (checked into repo for team reference)
-- Generated: By `gsd map-codebase` command
-- Contents: ARCHITECTURE.md, STRUCTURE.md, CONVENTIONS.md, TESTING.md, CONCERNS.md
+**.planning/codebase/（規劃文件）：**
+- 目的：codebase 架構與結構分析文件
+- 包含：ARCHITECTURE.md / STRUCTURE.md / TESTING.md / CONVENTIONS.md / CONCERNS.md
+- 生成：由 GSD `/gsd-map-codebase` 命令產生
+- 用途：指導後續實現與重構
 
 ---
 
-*Structure analysis: 2026-04-07*
+*結構分析：2026-04-09*

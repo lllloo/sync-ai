@@ -1,105 +1,120 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-07
+**Analysis Date:** 2026-04-09
 
 ## Languages
 
 **Primary:**
-- JavaScript (Node.js) 18+ (LTS) - Main CLI application (`sync.js`)
-- Bash/shell - Status line display and git integration (`claude/statusline.sh`)
-- JSON - Configuration and lock files (`claude/settings.json`, `skills-lock.json`)
+- JavaScript (Node.js) - All application logic and CLI tools
 
-**Testing:**
-- JavaScript - Unit tests using Node.js built-in test runner
+**Secondary:**
+- Bash - Utilities like `statusline.sh`
 
 ## Runtime
 
 **Environment:**
-- Node.js >= 18 (LTS) - Cross-platform runtime
-- Bash shell - For script execution and CLI operations
-- Git - Version control and repository management
+- Node.js >= 18 (LTS) - Required for all operations
 
-**Platform Support:**
-- Windows 11 (primary development target)
-- macOS (secondary support)
-- Cross-platform design with path normalization
+**Package Manager:**
+- npm - Command runner and script execution
+- Lockfile: Not present (zero external dependencies)
 
 ## Frameworks
 
-**Testing:**
-- Node.js built-in `node:test` module (zero external dependency)
-- Node.js built-in `assert/strict` module for assertions
+**Core:**
+- Node.js Built-in Modules Only
+  - `fs` - File system operations
+  - `path` - Path manipulation
+  - `os` - Operating system utilities
+  - `readline` - Interactive user input
+  - `child_process` - Process spawning for external tools
+  - `node:test` - Unit testing framework
+  - `node:assert/strict` - Test assertions
 
-**CLI Framework:**
-- Custom CLI implementation in `sync.js` (~1700 lines)
-- No external CLI library; uses core modules only
+**Testing:**
+- node:test (Node.js Built-in) - Pure function unit testing
+  - Config: No external config needed
+  - No external dependencies required
 
 **Build/Dev:**
-- npm - Package manager for script execution
-- No bundler required (zero dependencies approach)
+- No build tools needed - Single file architecture (`sync.js`)
 
 ## Key Dependencies
 
 **Critical:**
 - None - Zero external npm dependencies by design
-- All functionality uses only Node.js built-in modules
+  - All functionality uses only Node.js standard library
 
-**Built-in Modules Used:**
-- `fs` - File system operations (read/write files, directories)
-- `path` - Cross-platform path handling
-- `os` - OS detection and home directory resolution
-- `readline` - Interactive prompts for user confirmation
-- `child_process` (spawnSync) - Git command execution
+**Infrastructure:**
+- Git CLI - External tool for version control operations
+  - Invoked via `child_process.spawnSync`
+  - Path: `git` command from system PATH
+
+- Bash/POSIX Tools - External utilities
+  - `diff` command - For file comparison
+  - `npx` - npm package executor for skills installation
+  - Invoked via `child_process.spawnSync`
 
 ## Configuration
 
 **Environment:**
-- Configured via `claude/settings.json` stored in user's `.claude` home directory
-- Settings include Claude Code permissions, plugins, and UI preferences
-- Device-specific fields (`model`, `effortLevel`) excluded from sync to maintain device independence
+- User home directory: `process.env.HOME` (macOS/Linux) or `os.homedir()` (Windows)
+- No `.env` files required - Configuration stored in version-controlled JSON files
 
 **Build:**
-- No build step - Direct Node.js execution
-- `sync.js` is executable with shebang `#!/usr/bin/env node`
+- No build configuration needed
+- Single entry point: `sync.js` (shebang: `#!/usr/bin/env node`)
 
 **Key Configuration Files:**
-- `.gitignore` - Excludes `.agents/`, `.agent/`, `node_modules/`, and log files
-- `package.json` - Minimal npm scripts for CLI operations
-- `.sync-history.log` - Audit trail of sync operations (git-ignored)
+- `package.json` - npm scripts and project metadata
+- `skills-lock.json` - Global skills manifest (cross-device source of truth)
+- `claude/settings.json` - Claude Code settings template (contains device-specific fields: `model`, `effortLevel`)
 
 ## Platform Requirements
 
 **Development:**
-- Windows 11 or macOS with Bash support
-- Node.js >= 18 LTS
-- npm (bundled with Node.js)
-- Git (for repository operations)
-- Text editor (VS Code recommended for Claude Code)
+- Node.js >= 18
+- Git (any recent version)
+- Bash or POSIX-compatible shell
+- Working directory: Git repository root
+
+**Supported Platforms:**
+- Windows 11+ (primary development platform)
+- macOS (secondary)
+- Linux (POSIX-compatible)
 
 **Production/Deployment:**
-- Runs on end-user machines (Windows 11, macOS)
-- Uses private Git repository for configuration storage
-- No server components required
-- No external API dependencies or cloud services
+- Same requirements as development
+- No separate production build step
+- Git access required for sync operations
+- `npx` available for skills management
 
-## Runtime Characteristics
+## Data Storage
 
-**Exit Codes:**
-- `0` (EXIT_OK) - Successful operation or no differences detected
-- `1` (EXIT_DIFF) - Differences found (useful for CI workflows)
-- `2` (EXIT_ERROR) - Error occurred during operation
+**File-based:**
+- Local user configuration: `~/.claude/` directory structure
+- Repo-tracked configuration: `./claude/` directory
+- JSON files for settings and skills manifest
 
-**Performance Constraints:**
-- LCS (Longest Common Subsequence) algorithm limited to 2000 lines max for diff computation to prevent memory exhaustion
-- Falls back to approximate diff for large files (O(mn) memory prevention)
+**Atomic Write Safety:**
+- Uses temporary file + atomic rename pattern in `writeJsonSafe()`
+- EXDEV fallback for cross-filesystem moves (Windows temporary directory behavior)
 
-**Architecture Principles:**
-- Single-file CLI design for portability and zero-dependency guarantee
-- Section banners organize logical areas within `sync.js`
-- Function size limit: max 60 lines per function (enforced constraint)
-- Data-driven dispatch pattern using `COMMANDS` object
-- Atomic write operations to prevent data corruption on power loss
+## External Tool Integration
+
+**Git:**
+- Spawned via `child_process.spawnSync('git', ...)`
+- Operations: diff, status, used by CI systems (exit code `1` for diff mode)
+
+**File Comparison:**
+- `diff` command spawned via `child_process.spawnSync`
+- Used for line-by-line diff output (fallback for large files exceeds LCS_MAX_LINES=2000 lines)
+
+**Skills Manager:**
+- `npx skills` - Installed globally with `-g` flag
+- Operations: `npx skills add`, `npx skills list`, `npx skills remove`
+- Not executed by sync tool - only suggested via CLI output
 
 ---
 
-*Stack analysis: 2026-04-07*
+*Stack analysis: 2026-04-09*
