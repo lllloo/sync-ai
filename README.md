@@ -19,7 +19,8 @@ npm run to-repo
 # repo 設定 → 本機（套用，會先預覽再確認）
 npm run to-local
 
-# 比較本機 vs repo 的 skills 差異（不自動同步，僅列出建議指令）
+# 比較本機 vs repo 的 skills 差異（不自動同步）
+# 本機多裝者會同時列出 (A) 加入 repo 與 (B) 從本機移除 兩種建議指令
 npm run skills:diff
 
 # 新增 skill 到 skills-lock.json
@@ -95,6 +96,6 @@ npm run to-local
 - `settings.json` 的 `model`、`effortLevel` 為裝置特定設定，to-repo 時自動排除，to-local 時保留本機值
 - `.agents/` 目錄（skill 實體檔案）已加入 `.gitignore`，不進 repo
 - agents 儲存於 `claude/agents/`，以 package 子目錄分組
-- Skills 不在自動同步範圍內，用 `npm run skills:diff` 查看差異，再自行執行建議的 `npx skills` 指令
+- Skills 不在自動同步範圍內，用 `npm run skills:diff` 查看差異；本機多裝者會列出 `npm run skills:add`（加入 repo）與 `npx skills remove`（從本機移除）兩種建議
 - JSON 寫入使用 atomic write（先寫暫存檔再 rename），避免中途斷電導致檔案損壞
 - 每次 to-repo / to-local 操作會記錄到 `.sync-history.log`（已加入 .gitignore）
