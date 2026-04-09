@@ -1095,14 +1095,14 @@ function applySyncItems(items, direction, opts) {
       }
     } else if (item.type === 'file') {
       const existed = fs.existsSync(item.dest);
-      if (copyFile(item.src, item.dest, true, dryRun)) {
+      if (copyFile(item.src, item.dest, false, dryRun)) {
         const action = existed ? 'updated' : 'added';
         stats[action]++;
         changeLog.push(`${item.label} (${action})`);
         printStatusLine(action === 'added' ? 'added' : 'changed', item.label);
       }
     } else if (item.type === 'dir') {
-      for (const c of mirrorDir(item.src, item.dest, [], true, dryRun)) {
+      for (const c of mirrorDir(item.src, item.dest, [], false, dryRun)) {
         stats[c.action]++;
         changeLog.push(`${item.label}/${c.rel} (${c.action})`);
         const iconType = c.action === 'added' ? 'added' : c.action === 'deleted' ? 'deleted' : 'changed';
