@@ -1475,9 +1475,19 @@ function runSkillsDiff() {
   }
 
   if (onlyInLocal.length > 0) {
-    console.log(col.bold('\n  -- 本機多裝的 skills（自行決定是否移除） --'));
+    console.log(col.bold('\n  -- 本機多裝的 skills --'));
+    console.log(col.dim('    （A）加入 repo 紀錄：'));
     for (const name of onlyInLocal) {
-      console.log(`    npx skills remove ${name} -g -y`);
+      const skill = localSkills[name];
+      if (skill && skill.source) {
+        console.log(`      npm run skills:add -- ${name} ${skill.source}`);
+      } else {
+        console.log(`      npm run skills:add -- ${name} <source>`);
+      }
+    }
+    console.log(col.dim('    （B）從本機移除：'));
+    for (const name of onlyInLocal) {
+      console.log(`      npx skills remove ${name} -g -y`);
     }
   }
 

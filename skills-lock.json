@@ -16,6 +16,10 @@
     "gan-style-harness": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github"
     }
   }
 }
