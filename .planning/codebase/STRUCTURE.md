@@ -31,7 +31,6 @@ sync-ai/
 │   └── codebase/           # GSD codebase analysis documents
 │       ├── ARCHITECTURE.md
 │       └── STRUCTURE.md
-├── gan-harness/            # GAN iteration records (spec, feedback, state)
 └── .git/                   # Git repository
 ```
 
@@ -74,11 +73,6 @@ sync-ai/
 - Purpose: GSD codebase analysis output
 - Contains: ARCHITECTURE.md, STRUCTURE.md, CONVENTIONS.md, TESTING.md, CONCERNS.md (as generated)
 - Not synced: Project-local documentation only
-
-**`gan-harness/`:**
-- Purpose: GAN (Get Shit Done) automation iteration records
-- Contains: spec, eval-rubric, feedback, generator-state
-- Not sync-related: Used for Claude Code optimization iterations only
 
 ## Key File Locations
 
@@ -123,7 +117,7 @@ sync-ai/
 - **Sync targets**: `claude/`, `.agents/`, `.claude/` (mirrors of CLI home directories)
 - **Test**: `test/` (contains test files)
 - **Planning**: `.planning/codebase/` (GSD codebase docs)
-- **Tool dirs**: `gan-harness/` (iteration records), `.git/` (version control)
+- **Tool dirs**: `.git/` (version control)
 
 **Functions:**
 
@@ -188,12 +182,6 @@ sync-ai/
 - Committed: Yes (the `.gitignore` file itself is in repo)
 - Generated: No
 - Contents: `.agents/` (installed skills), `.sync-history.log` (operation audit), `.DS_Store` (macOS)
-
-**`gan-harness/`:**
-- Purpose: GAN optimization iteration records (separate from sync tool functionality)
-- Committed: Yes (but not part of sync logic)
-- Generated: By GAN harness during optimization
-- Note: Unrelated to sync functionality, only for Claude Code AI optimization
 
 **`.claude/` (project-local):**
 - Purpose: Project-specific Claude Code configuration

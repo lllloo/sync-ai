@@ -85,4 +85,3 @@ gh api "repos/VoltAgent/awesome-claude-code-subagents/contents/categories/<categ
 
 - `.agents/`（skill 實體）、`.sync-history.log`、`.DS_Store` 皆在 `.gitignore`
 - Skills 不在自動同步範圍，`skills-lock.json` 為各裝置參考清單（source of truth）
-- `gan-harness/` 目錄為 GAN-style harness 迭代紀錄（spec、eval-rubric、feedback、generator-state），與同步功能無關
