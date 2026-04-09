@@ -1201,6 +1201,24 @@ function buildFullDiffList(items, diffItems) {
     }
   }
 
+  // 補上無差異的 dir 項目（以摘要行呈現，證明已被檢查）
+  for (const item of items) {
+    if (item.type !== 'dir') continue;
+    const prefix = `claude/${item.label}/`;
+    const hasAny = result.some(d => d.label.startsWith(prefix));
+    if (!hasAny) {
+      result.push({
+        label: prefix,
+        status: null,
+        src: item.src,
+        dest: item.dest,
+        verboseSrc: item.verboseSrc,
+        verboseDest: item.verboseDest,
+        itemType: 'dir',
+      });
+    }
+  }
+
   // 排序：使用 itemType 欄位，dir 排在後面
   result.sort((a, b) => {
     const aIsDir = a.itemType === 'dir';
