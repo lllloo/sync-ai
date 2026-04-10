@@ -7,6 +7,7 @@
     "status": "node sync.js status",
     "skills:diff": "node sync.js skills:diff",
     "skills:add": "node sync.js skills:add",
+    "skills:remove": "node sync.js skills:remove",
     "to-repo": "node sync.js to-repo",
     "to-local": "node sync.js to-local",
     "test": "node --test test/sync.test.js test/settings.test.js"

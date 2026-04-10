@@ -65,8 +65,9 @@ const COMMANDS = {
   'status':      { alias: 's',  desc: '同時比對設定與 skills 差異',     handler: null },
   'to-repo':     { alias: 'tr', desc: '本機設定 -> repo',              handler: null },
   'to-local':    { alias: 'tl', desc: 'repo 設定 -> 本機',              handler: null },
-  'skills:diff': { alias: 'sd', desc: '比對 skills 差異',              handler: null },
-  'skills:add':  { alias: 'sa', desc: '新增 skill 到 skills-lock.json', handler: null },
+  'skills:diff':   { alias: 'sd', desc: '比對 skills 差異',                handler: null },
+  'skills:add':    { alias: 'sa', desc: '新增 skill 到 skills-lock.json',  handler: null },
+  'skills:remove': { alias: 'sr', desc: '從 skills-lock.json 移除 skill',  handler: null },
   'help':        { alias: null, desc: '顯示此說明',                    handler: null },
 };
 
@@ -1601,6 +1602,40 @@ function runSkillsAdd(opts) {
 }
 
 /**
+ * skills:remove 指令：從 skills-lock.json 移除 skill
+ * @param {ParsedArgs} opts - CLI 引數
+ * @returns {number} exit code
+ */
+function runSkillsRemove(opts) {
+  const name = opts.extraArgs[0];
+  if (!name) {
+    throw new SyncError(
+      '請提供 skill 名稱\n  用法：node sync.js skills:remove <name>',
+      ERR.INVALID_ARGS,
+    );
+  }
+
+  const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
+  if (!fs.existsSync(repoLockPath)) {
+    throw new SyncError('找不到 skills-lock.json', ERR.FILE_NOT_FOUND);
+  }
+
+  const lock = readJson(repoLockPath);
+  if (!lock.skills || !lock.skills[name]) {
+    console.log(col.yellow(`\n  [!] ${name} 不在 skills-lock.json 中\n`));
+    return EXIT_OK;
+  }
+
+  delete lock.skills[name];
+  writeJsonSafe(repoLockPath, lock);
+
+  console.log(col.bold(`\n  已移除 ${col.cyan(name)}`));
+  console.log(col.dim('  若本機已安裝，請執行：'));
+  console.log(`    npx skills remove ${name} -g -y\n`);
+  return EXIT_OK;
+}
+
+/**
  * 印出版本號（--version 處理）
  * @returns {void}
  */
@@ -1777,7 +1812,8 @@ function attachCommandHandlers() {
   COMMANDS['to-repo'].handler     = (opts) => runToRepo(opts);
   COMMANDS['to-local'].handler    = (opts) => runToLocal(opts);
   COMMANDS['skills:diff'].handler = ()     => runSkillsDiff();
-  COMMANDS['skills:add'].handler  = (opts) => runSkillsAdd(opts);
+  COMMANDS['skills:add'].handler    = (opts) => runSkillsAdd(opts);
+  COMMANDS['skills:remove'].handler = (opts) => runSkillsRemove(opts);
   COMMANDS['help'].handler        = ()     => { runHelp(); return EXIT_OK; };
 }
 

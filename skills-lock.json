@@ -25,11 +25,7 @@
       "source": "kepano/obsidian-skills",
       "sourceType": "github"
     },
-    "json-canvas": {
-      "source": "kepano/obsidian-skills",
-      "sourceType": "github"
-    },
-    "obsidian-bases": {
+"obsidian-bases": {
       "source": "kepano/obsidian-skills",
       "sourceType": "github"
     },
