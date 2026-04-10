@@ -3,7 +3,7 @@
 input=$(cat)
 
 # Parse with bash regex (no subprocesses)
-[[ $input =~ \"display_name\":\"([^\"]+)\" ]] && MODEL="${BASH_REMATCH[1]}"
+[[ $input =~ \"display_name\":\"([^\"]+)\" ]] && MODEL="${BASH_REMATCH[1]#Claude }" && MODEL="${MODEL% (*}"
 [[ $input =~ \"current_dir\":\"([^\"]+)\" ]]  && DIR="${BASH_REMATCH[1]}"
 [[ $input =~ \"used_percentage\":([0-9]+) ]]   && PCT="${BASH_REMATCH[1]}"
 PCT=${PCT:-0}
