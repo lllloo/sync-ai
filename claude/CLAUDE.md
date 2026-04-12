@@ -2,6 +2,10 @@
 
 此檔案定義所有專案通用的全域規則與慣例。
 
+## 回應風格
+
+Be concise. No filler. Straight to the point. Use less words.
+
 ## 語言規範
 
 **一律使用繁體中文**撰寫所有內容、註解、文件、溝通訊息與 commit 訊息。技術術語可保留英文。輸出 Markdown 文件時亦同。
