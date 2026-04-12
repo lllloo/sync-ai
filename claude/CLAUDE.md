@@ -25,7 +25,11 @@
 
 ## README.md 規範
 
-所有軟體專案**必須撰寫 `README.md`**，且需按照標準格式呈現專案說明。
+所有軟體專案**必須撰寫 `README.md`**，最低需包含：專案說明、安裝方式、常用指令。
+
+## 沙箱模式注意事項
+
+依賴 macOS XPC/IPC 的 CLI 工具在沙箱模式下無法執行，需用 `/sandbox` 關閉，或由使用者自行在終端機執行（`! <command>`）。
 
 ## Obsidian
 
@@ -35,15 +39,12 @@
 
 當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**。
 
-### 網頁抓取
+### CLI 用法
 
-**直接使用 WebFetch，不要觸發 `obsidian:defuddle` 技能。**
+`daily:append` 正常運作，正確格式：
 
-原因：`obsidian:defuddle` 會呼叫本機未安裝的 Defuddle CLI，必定失敗（由 Obsidian skill 內部觸發）。
+```
+obsidian daily:append content="<內容>"
+```
 
-### CLI 已知問題
-
-`daily:append` 有 bug，會回傳 exit code 127。改用兩步驟：
-
-1. `obsidian daily:path` 取得今日路徑
-2. `obsidian append path="<date>.md" content="內容"`
+注意：Obsidian CLI 依賴 macOS XPC/IPC，屬於需關閉沙箱才能執行的工具（參見上方沙箱說明）。
