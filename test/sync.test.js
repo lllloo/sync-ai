@@ -166,6 +166,12 @@ test('parseArgs：未知指令保留原值供上層判斷', () => {
   assert.equal(result.command, 'nonexistent');
 });
 
+test('parseArgs：-- 分隔符後的引數皆收入 extraArgs', () => {
+  const result = withArgv(['skills:add', '--', '--some-flag', 'value'], () => parseArgs());
+  assert.equal(result.command, 'skills:add');
+  assert.deepEqual(result.extraArgs, ['--some-flag', 'value']);
+});
+
 // -----------------------------------------------------------------------------
 // toRelativePath
 // -----------------------------------------------------------------------------

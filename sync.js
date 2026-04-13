@@ -28,6 +28,7 @@ const HOME = os.homedir();
 const CLAUDE_HOME = path.join(HOME, '.claude');
 const AGENTS_HOME = path.join(HOME, '.agents');
 const SYNC_HISTORY_LOG = path.join(REPO_ROOT, '.sync-history.log');
+const LOCAL_SKILL_LOCK = path.join(AGENTS_HOME, '.skill-lock.json');
 
 /** settings.json 中各裝置獨立的欄位，同步時排除 */
 const DEVICE_FIELDS = ['model', 'effortLevel'];
@@ -262,7 +263,12 @@ function handleSignal(signal) {
   }
   // 移除自身 handler 後 re-raise signal，讓 OS 設定正確的 exit code
   process.removeListener(signal, handleSignal);
-  process.kill(process.pid, signal);
+  // Windows 不支援 signal re-raise（會拋 ESRCH），改用慣例 exit code
+  if (process.platform === 'win32') {
+    process.exit(130); // 128 + SIGINT(2)
+  } else {
+    process.kill(process.pid, signal);
+  }
 }
 
 process.on('SIGINT', handleSignal);
@@ -371,10 +377,19 @@ function writeJsonSafe(filePath, data) {
     fs.writeFileSync(tmpPath, content);
     fs.renameSync(tmpPath, filePath);
   } catch (e) {
-    // rename 跨磁碟可能失敗，fallback 為直接寫入
+    tempFiles.delete(tmpPath);
     try { fs.unlinkSync(tmpPath); } catch (_) { /* ignore */ }
     if (e.code === 'EXDEV') {
-      fs.writeFileSync(filePath, content);
+      // 跨磁碟 rename 失敗：在目標目錄建立 tmp 再 rename，保持原子性
+      const localTmp = filePath + `.tmp.${process.pid}`;
+      registerTempFile(localTmp);
+      try {
+        fs.writeFileSync(localTmp, content);
+        fs.renameSync(localTmp, filePath);
+      } finally {
+        tempFiles.delete(localTmp);
+        try { fs.unlinkSync(localTmp); } catch (_) { /* ignore */ }
+      }
     } else {
       throw new SyncError(`寫入 JSON 失敗：${e.message}`, ERR.IO_ERROR, { path: filePath });
     }
@@ -672,8 +687,9 @@ function computeLineDiff(oldText, newText) {
 }
 
 /**
- * 簡易逐行比對（大檔案用，結果為近似值：Set 會忽略重複行的位置資訊）
- * 呼叫端應以 isApproximate 欄位提示使用者
+ * 簡易逐行比對（大檔案用，結果為近似值）
+ * 注意：使用 Set 比對，重複行只計一次——若舊文字有 3 行 "foo" 而新文字只有 1 行，
+ * 此函式不會顯示任何刪除行。呼叫端應以 isApproximate 欄位提示使用者
  * @param {string[]} oldLines
  * @param {string[]} newLines
  * @returns {Array<{type: '+'|'-'|' ', line: string, isApproximate?: boolean}>}
@@ -1084,7 +1100,7 @@ function diffSyncItems(items, direction) {
         itemType: 'file',
       });
     } else if (item.type === 'dir') {
-      const diffs = diffDir(item.src, item.dest);
+      const diffs = diffDir(item.src, item.dest, item.excludePatterns || []);
       for (const d of diffs) {
         const src = path.join(item.src, d.rel);
         const dest = path.join(item.dest, d.rel);
@@ -1505,7 +1521,7 @@ function runSkillsDiff() {
   console.log(col.bold('\n  Skills 差異比對\n'));
 
   const repoLockPath = path.join(REPO_ROOT, 'skills-lock.json');
-  const localLockPath = path.join(AGENTS_HOME, '.skill-lock.json');
+  const localLockPath = LOCAL_SKILL_LOCK;
 
   let repoSkills = {};
   let localSkills = {};
@@ -1729,9 +1745,15 @@ function parseArgs() {
   };
 
   let commandFound = false;
+  let pastSeparator = false;
 
   for (const arg of args) {
-    if (arg === '--dry-run') {
+    if (arg === '--') {
+      // `--` 之後的所有引數皆視為 extraArgs（支援以 `-` 開頭的 skill 名稱等）
+      pastSeparator = true;
+    } else if (pastSeparator) {
+      result.extraArgs.push(arg);
+    } else if (arg === '--dry-run') {
       result.dryRun = true;
     } else if (arg === '--verbose') {
       result.verbose = true;
@@ -1798,7 +1820,7 @@ function askConfirm(question) {
 
 /**
  * 主函式：解析引數、分派指令、統一錯誤處理
- * @returns {Promise<void>}
+ * @returns {Promise<number>}
  */
 async function main() {
   // 注入各指令 handler（延遲到 main 執行階段，避免宣告順序 TDZ 問題）
