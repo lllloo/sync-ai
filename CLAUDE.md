@@ -39,6 +39,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | 全文比對 |
 | `claude/agents/` | `~/.claude/agents/` | 以 package 子目錄組織（如 `awesome-claude-code-subagents/`） |
 | `claude/commands/` | `~/.claude/commands/` | 目錄鏡射 |
+| `claude/skills/` | `~/.claude/skills/` | 目錄鏡射 |
 
 ## 架構重點
 

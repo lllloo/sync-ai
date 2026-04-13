@@ -437,6 +437,11 @@ function getFiles(dir, base = '') {
   const result = [];
   for (const entry of entries) {
     if (GLOBAL_EXCLUDE.includes(entry.name)) continue;
+    if (entry.isSymbolicLink()) {
+      try {
+        if (fs.statSync(path.join(dir, entry.name)).isDirectory()) continue;
+      } catch (_) { continue; }
+    }
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       result.push(...getFiles(path.join(dir, entry.name), rel));
@@ -999,6 +1004,14 @@ function buildSyncItems(direction) {
       verboseSrc: path.join(src, 'commands'),
       verboseDest: path.join(dest, 'commands'),
     },
+    {
+      label: 'skills',
+      src: path.join(src, 'skills'),
+      dest: path.join(dest, 'skills'),
+      type: 'dir',
+      verboseSrc: path.join(src, 'skills'),
+      verboseDest: path.join(dest, 'skills'),
+    },
   ];
 }
 
@@ -1256,6 +1269,7 @@ function buildFullDiffList(items, diffItems) {
 function printDetailedDiff(diffItems) {
   console.log(col.bold('\n  -- 詳細差異 --'));
   for (const item of diffItems) {
+    if (item.label.startsWith('claude/skills/')) continue;
     if (item.status === 'changed' && item.src && item.dest) {
       printFileDiff(item.src, item.dest, item.label);
     } else if (item.status === 'new' && item.src && fs.existsSync(item.src)) {
@@ -1279,7 +1293,17 @@ function runDiff(opts) {
   const allDiffItems = buildFullDiffList(items, diffSyncItems(items, 'to-repo'));
 
   let hasDiff = false;
+  const skillsSummary = {};
   for (const item of allDiffItems) {
+    if (item.label.startsWith('claude/skills/') && item.status !== null) {
+      const skill = item.label.split('/')[2];
+      if (!skillsSummary[skill]) skillsSummary[skill] = { added: 0, changed: 0, deleted: 0 };
+      if (item.status === 'new') skillsSummary[skill].added++;
+      else if (item.status === 'changed') skillsSummary[skill].changed++;
+      else if (item.status === 'deleted') skillsSummary[skill].deleted++;
+      hasDiff = true;
+      continue;
+    }
     if (item.status === null) {
       printStatusLine('ok', item.label);
     } else if (item.status === 'new') {
@@ -1296,7 +1320,15 @@ function runDiff(opts) {
       logVerbosePaths(item.verboseSrc, item.verboseDest || item.dest);
     }
   }
-
+  for (const [skill, counts] of Object.entries(skillsSummary)) {
+    const parts = [];
+    if (counts.added)   parts.push(`+${counts.added}`);
+    if (counts.changed) parts.push(`~${counts.changed}`);
+    if (counts.deleted) parts.push(`-${counts.deleted}`);
+    const total = counts.added + counts.changed + counts.deleted;
+    printStatusLine(counts.deleted && !counts.added ? 'deleted' : 'added',
+      `claude/skills/${skill}`, `${parts.join(' ')}  共 ${total} 個檔案`);
+  }
   if (!hasDiff) {
     console.log(col.green('\n  本機與 repo 完全一致\n'));
     return EXIT_OK;
