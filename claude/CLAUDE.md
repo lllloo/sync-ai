@@ -15,6 +15,7 @@ Be concise. No filler. Straight to the point. Use less words.
 **禁止在 Bash 工具呼叫中使用 `$()` 命令替換** — 會觸發 Claude Code 安全確認提示。
 
 改以兩步執行：
+
 1. 先用獨立 Bash 呼叫取得值（例如 `date +%y%m%d%H%M`）
 2. 再將取得的字面值帶入下一個指令
 
@@ -42,6 +43,5 @@ Be concise. No filler. Straight to the point. Use less words.
 ### 筆記操作（日記、建立筆記、搜尋）
 
 當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**。
-
 
 注意：Obsidian CLI 依賴 macOS XPC/IPC，屬於需關閉沙箱才能執行的工具（參見上方沙箱說明）。
