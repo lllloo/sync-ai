@@ -1905,5 +1905,7 @@ if (require.main === module) {
     COMMANDS,
     COMMAND_ALIASES,
     VALID_COMMANDS,
+    attachCommandHandlers,
+    formatError,
   };
 }
