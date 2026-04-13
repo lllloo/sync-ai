@@ -27,6 +27,9 @@ npm run skills:diff
 npm run skills:add -- https://skills.sh/<org>/<repo>/<skill>
 npm run skills:add -- <name> <source>
 
+# 從 skills-lock.json 移除 skill
+npm run skills:remove -- <name>
+
 # 執行單元測試（node:test，零外部相依）
 npm test
 ```
@@ -43,6 +46,7 @@ npm test
 | `to-local` | `tl` |
 | `skills:diff` | `sd` |
 | `skills:add` | `sa` |
+| `skills:remove` | `sr` |
 
 ### 旗標
 
@@ -74,7 +78,8 @@ npm run to-local
 | 檔案 | 說明 |
 |------|------|
 | `sync.js` | 主腳本，實作所有指令邏輯（無外部相依） |
-| `test/sync.test.js` | 純函式單元測試（使用 Node.js 內建 `node:test`） |
+| `test/sync.test.js` | 同步邏輯純函式單元測試（使用 Node.js 內建 `node:test`） |
+| `test/settings.test.js` | settings.json 相關純函式單元測試 |
 | `package.json` | 定義所有 npm 指令 |
 | `claude/CLAUDE.md` | 對應 `~/.claude/CLAUDE.md` |
 | `claude/settings.json` | 對應 `~/.claude/settings.json` |
