@@ -43,12 +43,5 @@ Be concise. No filler. Straight to the point. Use less words.
 
 當用戶想記錄、建立筆記或搜尋 vault 時（觸發詞：「ob」、「筆記」、「日記」、「daily」、「記一下」、「找筆記」），**使用 Agent tool 委派給 `~/.claude/agents/obsidian.md`**。
 
-### CLI 用法
-
-`daily:append` 正常運作，正確格式：
-
-```
-obsidian daily:append content="<內容>"
-```
 
 注意：Obsidian CLI 依賴 macOS XPC/IPC，屬於需關閉沙箱才能執行的工具（參見上方沙箱說明）。
