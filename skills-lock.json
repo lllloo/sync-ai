@@ -36,6 +36,10 @@
     "obsidian-markdown": {
       "source": "kepano/obsidian-skills",
       "sourceType": "github"
+    },
+    "design-md": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github"
     }
   }
 }
